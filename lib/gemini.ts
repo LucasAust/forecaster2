@@ -24,13 +24,15 @@ export const geminiClient = {
 
         **STRICT RULES - READ CAREFULLY:**
         1. **NO HALLUCINATIONS**: Do NOT invent new merchants, categories, or amounts. Use ONLY what is in the history.
-        2. **RECURRING ONLY**: Only predict a transaction if it happens on a repeating schedule (e.g., Weekly, Bi-weekly, Monthly).
-        3. **IGNORE RANDOM**: If a transaction appears sporadic or random (like a one-off coffee or shopping trip), DO NOT predict it.
-        4. **EXACT AMOUNTS**: Use the exact amounts from the provided history. Expenses are already negative (e.g., -50.00). Income is positive.
-        5. **CONSERVATIVE**: It is better to return fewer, accurate predictions than many guesses.
-        6. **PRESERVE BATCHES**: If a specific merchant and amount appears multiple times on the same day in the history (e.g., 10 separate payments to United Airlines), you must predict 10 separate payments for the future date. Do not flatten or group them.
-        7. **END OF MONTH**: Pay special attention to transactions that occur on the 28th-31st. These are likely monthly bills. Ensure they are included in the forecast window.
-        8. **CONSISTENCY**: If a merchant is usually an expense (negative), ignore rare refunds (positive) when forecasting. Predict the dominant pattern (the expense).
+        2. **STRICT RECURRENCE**: Only predict a transaction if it happens on a repeating schedule (e.g., Weekly, Bi-weekly, Monthly). If it happens once a month, predict it EXACTLY once a month.
+        3. **ANCHOR DATES**: Identify the "Anchor Date" for monthly items (e.g., the 14th). Future predictions MUST align with this date (+/- 2 days for weekends). Do not let dates drift (e.g. 14th -> 24th is WRONG).
+        4. **MERCHANT DISTINCTNESS**: Treat merchants with different identifiers (e.g. "Uber 063015" vs "Uber 072515") as COMPLETELY SEPARATE series. Do not mix them.
+        5. **CONSISTENT HABITS**: If a merchant (even "random" ones like Starbucks, McDonald's) appears on a consistent monthly schedule (e.g. 12th of each month), PREDICT IT. Do not ignore it.
+        6. **SPORADIC DISCRETIONARY**: For categories that occur frequently but on random dates (e.g. Dining, Groceries, Transport), determine the **Average Weekly Frequency** and **Average Amount**. Predict them distributed roughly evenly.
+        7. **VARIABLE AMOUNTS**: For sporadic/variable items, use the **Average** amount of the recent history. For fixed bills, use the **Exact** amount.
+        8. **PRESERVE BATCHES**: If a specific merchant and amount appears multiple times on the same day in the history (e.g., 10 separate payments to United Airlines), you must predict 10 separate payments for the future date. Do not flatten or group them.
+        9. **END OF MONTH**: Pay special attention to transactions that occur on the 28th-31st. These are likely monthly bills. Ensure they are included.
+        10. **CONSISTENCY**: If a merchant is usually an expense (negative), ignore rare refunds (positive) when forecasting. Predict the dominant pattern (the expense).
 
         Input History:
         ${JSON.stringify(normalizedHistory.slice(0, 300))}
