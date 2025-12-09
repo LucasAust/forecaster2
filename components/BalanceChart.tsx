@@ -1,0 +1,91 @@
+"use client";
+
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { useEffect, useState } from "react";
+import { fetchForecast, processForecastData } from "@/lib/api";
+import { useSync } from "@/contexts/SyncContext";
+
+export function BalanceChart({ className = "h-[200px]", days = 30 }: { className?: string, days?: number }) {
+    const { forecast, loadingStage, balance } = useSync();
+    const [data, setData] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (forecast) {
+            const processed = processForecastData(forecast, balance);
+            setData(processed.slice(0, days));
+        }
+    }, [forecast, balance, days]);
+
+    // Ensure component is mounted to avoid hydration mismatch and size issues
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) return <div className={`${className} w-full flex items-center justify-center text-zinc-500`}>Loading...</div>;
+
+    // Only show loading if we are actively fetching the forecast
+    if (loadingStage === 'forecast') {
+        return <div className={`${className} w-full flex items-center justify-center text-zinc-500`}>Loading forecast...</div>;
+    }
+
+    if (!forecast || data.length === 0) {
+        return (
+            <div className={`${className} w-full flex flex-col items-center justify-center text-zinc-500`}>
+                <p>No forecast available</p>
+                <p className="text-xs mt-1">Connect a bank account to generate predictions</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`${className} w-full min-h-[100px] min-w-[100px]`}>
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data}>
+                    <defs>
+                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <XAxis
+                        dataKey="day"
+                        stroke="#52525b"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                    />
+                    <YAxis
+                        stroke="#52525b"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) =>
+                            new Intl.NumberFormat('en-US', {
+                                notation: "compact",
+                                maximumFractionDigits: 1
+                            }).format(value)
+                        }
+                    />
+                    <Tooltip
+                        contentStyle={{
+                            backgroundColor: "#18181b",
+                            border: "1px solid #27272a",
+                            borderRadius: "8px",
+                        }}
+                        itemStyle={{ color: "#fff" }}
+                        formatter={(value: number) => [`$${value.toFixed(2)}`, "Balance"]}
+                    />
+                    <Area
+                        type="monotone"
+                        dataKey="balance"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorBalance)"
+                    />
+                </AreaChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
