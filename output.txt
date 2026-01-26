@@ -1,0 +1,6 @@
+﻿Testing Plaid Connection...
+Environment: development
+Client ID: Set
+Secret: Set
+Available Environments: [ 'production', 'sandbox' ]
+Parsed PLAID_ENV: "development"

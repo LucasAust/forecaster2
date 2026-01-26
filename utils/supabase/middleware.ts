@@ -51,5 +51,36 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
+    if (user && !request.nextUrl.pathname.startsWith('/auth') && !request.nextUrl.pathname.startsWith('/login')) {
+        const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+        // If AAL2, we are good.
+        if (mfaData && mfaData.currentLevel === 'aal2') {
+            return supabaseResponse
+        }
+
+        // Check for verified factors
+        const { data: factors } = await supabase.auth.mfa.listFactors()
+        const hasVerifiedFactor = factors?.all?.some(f => f.status === 'verified')
+
+        if (!hasVerifiedFactor) {
+            // No verified factors -> Force Enrollment
+            if (!request.nextUrl.pathname.startsWith('/auth/mfa/enroll')) {
+                const url = request.nextUrl.clone()
+                url.pathname = '/auth/mfa/enroll'
+                return NextResponse.redirect(url)
+            }
+        } else {
+            // Has factors, but not AAL2 -> Force verification
+            if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
+                if (!request.nextUrl.pathname.startsWith('/auth/mfa/challenge')) {
+                    const url = request.nextUrl.clone()
+                    url.pathname = '/auth/mfa/challenge'
+                    return NextResponse.redirect(url)
+                }
+            }
+        }
+    }
+
     return supabaseResponse
 }

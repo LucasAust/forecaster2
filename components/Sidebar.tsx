@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LineChart, PieChart, MessageSquare, CreditCard, Wallet } from "lucide-react";
+import { LayoutDashboard, LineChart, PieChart, MessageSquare, CreditCard, Wallet, Settings } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { PlaidLink } from "./PlaidLink";
@@ -16,6 +16,7 @@ const navItems = [
   { name: "Budget Tracker", href: "/budget", icon: PieChart },
   { name: "Scenario Planner", href: "/scenarios", icon: MessageSquare },
   { name: "Transactions", href: "/transactions", icon: CreditCard },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
