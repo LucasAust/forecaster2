@@ -78,7 +78,7 @@ export default function Home() {
               className="bg-transparent text-3xl font-bold text-white focus:outline-none focus:border-b-2 focus:border-blue-500 w-auto min-w-[100px]"
             />
           </div>
-          <p className="text-zinc-400">Here's your financial forecast for today.</p>
+          <p className="text-zinc-400">Here is your financial forecast for today.</p>
         </div>
         <div className="flex items-center space-x-4">
           <div className="text-right">
