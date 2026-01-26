@@ -23,8 +23,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const { triggerUpdate, isSyncing, syncProgress, balance, error, loadingStage, transactions } = useSync();
 
-  // Onboarding mode: Data loaded but no transactions found
-  const isOnboarding = loadingStage === 'complete' && (!transactions || transactions.length === 0);
+  // Onboarding mode: Data loaded but no transactions AND no balance found
+  // If they have a balance, they likely connected a bank but maybe have no recent transactions.
+  const isOnboarding = loadingStage === 'complete' &&
+    (!transactions || transactions.length === 0) &&
+    balance === 0;
 
   return (
     // Removed "transition-transform" to ensure fixed overlay works correctly relative to viewport

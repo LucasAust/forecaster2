@@ -97,24 +97,35 @@ export async function GET(request: Request) {
                     })
                     .eq('item_id', item.item_id);
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error(`Error syncing item ${item.item_id}:`, err);
+                if (err.response) {
+                    console.error('Plaid Sync Error Details:', JSON.stringify(err.response.data, null, 2));
+                }
             }
         }
 
+        console.log("Finished syncing all items. Fetching from DB...");
+
         // Finally, fetch ALL up-to-date transactions and accounts from DB/Supabase to return unified view
-        const { data: finalItems } = await supabase
+        const { data: finalItems, error: itemsError } = await supabase
             .from('plaid_items')
             .select('accounts_data')
             .eq('user_id', user.id);
 
+        if (itemsError) console.error("Error fetching final items:", itemsError);
+
         allAccounts = finalItems?.flatMap(i => i.accounts_data || []) || [];
 
-        const { data: finalTransactions } = await supabase
+        const { data: finalTransactions, error: txError } = await supabase
             .from('transactions')
             .select('*')
             .eq('user_id', user.id)
             .order('date', { ascending: false });
+
+        if (txError) console.error("Error fetching final transactions:", txError);
+
+        console.log(`Returning ${finalTransactions?.length} transactions and ${allAccounts.length} accounts.`);
 
         allTransactions = finalTransactions || [];
 
