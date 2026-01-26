@@ -91,8 +91,20 @@ export function Sidebar() {
 
           <div className="flex flex-col gap-3">
             {/* Spotlight Container for Connect Button */}
-            <div className="flex justify-center">
+            <div className={clsx("flex justify-center transition-all duration-500", isOnboarding ? "relative z-[60] scale-110" : "")}>
               <PlaidLink />
+
+              {/* Onboarding Tooltip */}
+              {isOnboarding && (
+                <div className="absolute left-full top-1/2 ml-6 w-64 -translate-y-1/2 transform">
+                  <div className="relative rounded-xl bg-blue-600 p-4 shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-in fade-in slide-in-from-left-4 duration-700">
+                    {/* Arrow */}
+                    <div className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rotate-45 bg-blue-600"></div>
+                    <h3 className="mb-1 font-bold text-white">Get Started</h3>
+                    <p className="text-sm text-blue-50">Click here to connect your first account and activate your forecast.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
