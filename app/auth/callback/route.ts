@@ -22,6 +22,11 @@ export async function GET(request: Request) {
         if (!error) {
             return NextResponse.redirect(`${baseUrl}${next}`)
         }
+        console.error('PKCE exchange failed:', error.message)
+        // If PKCE fails (e.g. code verifier cookie missing), show the error
+        return NextResponse.redirect(
+            `${baseUrl}/login?error=${encodeURIComponent(error.message)}`
+        )
     }
 
     // Implicit / token_hash flow: verify the OTP token
@@ -33,10 +38,15 @@ export async function GET(request: Request) {
         if (!error) {
             return NextResponse.redirect(`${baseUrl}${next}`)
         }
+        console.error('Token hash verification failed:', error.message)
+        return NextResponse.redirect(
+            `${baseUrl}/login?error=${encodeURIComponent(error.message)}`
+        )
     }
 
-    // If both methods failed or no params provided
+    // No recognized params at all — show what we received for debugging
+    console.error('Auth callback received no valid params. Query:', Object.fromEntries(searchParams.entries()))
     return NextResponse.redirect(
-        `${baseUrl}/login?error=${encodeURIComponent('Email confirmation failed. Please try signing up again.')}`
+        `${baseUrl}/login?error=${encodeURIComponent('Email confirmation failed. The link may have expired — please try signing up again.')}`
     )
 }
