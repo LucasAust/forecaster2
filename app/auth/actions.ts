@@ -30,14 +30,7 @@ export async function enrollMFA() {
 
     const qrCode = await QRCode.toDataURL(data.totp.uri)
 
-    // Mark MFA method as TOTP in user_settings
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-        await supabase.from('user_settings').upsert(
-            { user_id: user.id, mfa_method: 'totp' },
-            { onConflict: 'user_id' }
-        )
-    }
+    // Do NOT set mfa_method yet — that happens after TOTP code is verified.
 
     return {
         id: data.id,
@@ -55,6 +48,15 @@ export async function verifyEnrollment(factorId: string, code: string) {
 
     if (error) {
         throw new Error(error.message)
+    }
+
+    // Commit: mark MFA method as TOTP in user_settings after successful verification
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+        await supabase.from('user_settings').upsert(
+            { user_id: user.id, mfa_method: 'totp' },
+            { onConflict: 'user_id' }
+        )
     }
 
     return data
@@ -90,31 +92,44 @@ export async function enrollEmailMFA() {
         throw new Error('No email address associated with this account')
     }
 
-    // Unenroll any existing TOTP factors first
-    const { data: factors } = await supabase.auth.mfa.listFactors()
-    for (const factor of factors?.all || []) {
-        await supabase.auth.mfa.unenroll({ factorId: factor.id })
-    }
+    // Invalidate any existing unused codes for this user
+    await supabase
+        .from('mfa_email_codes')
+        .update({ used: true })
+        .eq('user_id', user.id)
+        .eq('used', false)
 
-    // Set MFA method to email
-    await supabase.from('user_settings').upsert(
-        { user_id: user.id, mfa_method: 'email' },
-        { onConflict: 'user_id' }
-    )
-
-    // Send initial verification code to confirm enrollment
+    // Generate and store the verification code
     const code = generateOTPCode()
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
-    await supabase.from('mfa_email_codes').insert({
+    const { error: insertError } = await supabase.from('mfa_email_codes').insert({
         user_id: user.id,
         code,
         expires_at: expiresAt,
     })
 
-    await sendMFACode(user.email, code)
+    if (insertError) {
+        throw new Error('Failed to generate verification code. Please try again.')
+    }
 
-    return { email: user.email }
+    // Send the code — only after it's stored successfully
+    try {
+        await sendMFACode(user.email, code)
+    } catch (e) {
+        // Clean up the stored code since sending failed
+        await supabase
+            .from('mfa_email_codes')
+            .update({ used: true })
+            .eq('user_id', user.id)
+            .eq('code', code)
+        throw new Error('Failed to send verification email. Please try again.')
+    }
+
+    // Do NOT set mfa_method yet — that happens after the code is verified.
+    // Do NOT unenroll TOTP factors yet — that also happens after verification.
+
+    return { email: maskEmail(user.email) }
 }
 
 export async function sendEmailMFAChallenge() {
@@ -187,6 +202,18 @@ export async function verifyEmailMFACode(code: string) {
         .from('mfa_email_codes')
         .update({ used: true })
         .eq('id', codeRow.id)
+
+    // Commit the email MFA enrollment: set mfa_method in user_settings
+    await supabase.from('user_settings').upsert(
+        { user_id: user.id, mfa_method: 'email' },
+        { onConflict: 'user_id' }
+    )
+
+    // Unenroll any existing TOTP factors (switching from TOTP to email)
+    const { data: factors } = await supabase.auth.mfa.listFactors()
+    for (const factor of factors?.all || []) {
+        await supabase.auth.mfa.unenroll({ factorId: factor.id })
+    }
 
     // Set the email MFA verified cookie
     await setEmailMfaVerified(user.id)
