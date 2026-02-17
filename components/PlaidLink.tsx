@@ -13,12 +13,13 @@ export function PlaidLink() {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
+        let cancelled = false;
+
         const checkConnection = async () => {
             try {
-                // We can check if we have transactions as a proxy for connection
                 const res = await fetch('/api/transactions');
                 const data = await res.json();
-                if (data.transactions && data.transactions.length > 0) {
+                if (!cancelled && data.transactions && data.transactions.length > 0) {
                     setIsConnected(true);
                 }
             } catch (e) {
@@ -33,14 +34,16 @@ export function PlaidLink() {
                     method: 'POST',
                 });
                 const data = await response.json();
-                setToken(data.link_token);
+                if (!cancelled) setToken(data.link_token);
             } catch (error) {
                 console.error('Error creating link token:', error);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
         createLinkToken();
+
+        return () => { cancelled = true; };
     }, []);
 
     const { triggerUpdate } = useSync();
@@ -76,7 +79,7 @@ export function PlaidLink() {
 
     if (loading) {
         return (
-            <button disabled className="flex items-center gap-2 rounded-xl bg-blue-600/50 px-4 py-2 text-sm font-medium text-white cursor-not-allowed">
+            <button type="button" disabled className="flex items-center gap-2 rounded-xl bg-blue-600/50 px-4 py-2 text-sm font-medium text-white cursor-not-allowed">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading...
             </button>
@@ -84,25 +87,22 @@ export function PlaidLink() {
     }
 
     return (
-        <button
-            onClick={() => !isConnected && open()}
-            disabled={!ready || isConnected}
-            className={`group flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-all ${isConnected
-                ? "bg-green-600/20 text-green-500 cursor-default border border-green-600/20"
-                : "bg-blue-600 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
-                }`}
-        >
-            {isConnected ? (
-                <>
+        <div className="flex flex-col gap-2">
+            {isConnected && (
+                <div className="flex items-center gap-2 rounded-xl bg-green-600/20 px-4 py-2 text-sm font-medium text-green-500 border border-green-600/20">
                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                     Bank Connected
-                </>
-            ) : (
-                <>
-                    <Plus className="h-4 w-4" />
-                    Connect Bank
-                </>
+                </div>
             )}
-        </button>
+            <button
+                type="button"
+                onClick={() => open()}
+                disabled={!ready}
+                className="group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
+            >
+                <Plus className="h-4 w-4" />
+                {isConnected ? "Add Another Bank" : "Connect Bank"}
+            </button>
+        </div>
     );
 }

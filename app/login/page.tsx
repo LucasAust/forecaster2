@@ -15,9 +15,9 @@ export default async function LoginPage({
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-violet-600 shadow-lg shadow-blue-500/20">
                         <Wallet className="h-7 w-7 text-white" />
                     </div>
-                    <h2 className="mt-6 text-3xl font-bold tracking-tight text-white">
+                    <h1 className="mt-6 text-3xl font-bold tracking-tight text-white">
                         Welcome to Arc
-                    </h2>
+                    </h1>
                     <p className="mt-2 text-sm text-zinc-400">
                         Sign in to your account or create a new one
                     </p>

@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { Hourglass } from "lucide-react";
 
@@ -56,6 +58,7 @@ export function LoadingScreen({ stage, onStartTutorial }: LoadingScreenProps) {
                 {/* Tutorial Trigger */}
                 {onStartTutorial && (
                     <button
+                        type="button"
                         onClick={onStartTutorial}
                         className="rounded-full border border-zinc-800 bg-zinc-900/50 px-6 py-2 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 transition-all cursor-pointer z-50 pointer-events-auto"
                     >

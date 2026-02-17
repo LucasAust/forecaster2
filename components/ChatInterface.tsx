@@ -1,22 +1,27 @@
 "use client";
 
 import { Send, Sparkles, Loader2 } from "lucide-react";
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { useSync } from "@/contexts/SyncContext";
 
 export interface ChatInterfaceRef {
     sendMessage: (message: string) => void;
 }
 
+interface ChatInterfaceProps {
+    onResponse?: (response: string) => void;
+}
+
 const initialMessages = [
     { role: "assistant", content: "Hello! I'm your financial scenario assistant. Ask me anything like 'What if I buy a car?' or 'Can I afford a vacation?'" },
 ];
 
-export const ChatInterface = forwardRef<ChatInterfaceRef, {}>((props, ref) => {
+export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ onResponse }, ref) => {
     const { transactions, forecast } = useSync();
     const [messages, setMessages] = useState(initialMessages);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const isLoadingRef = useRef(false);
     const [budget, setBudget] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -30,31 +35,28 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, {}>((props, ref) => {
             .catch(err => console.error("Failed to fetch budget for chat context", err));
     }, []);
 
-    // Auto-scroll to bottom
+    // Auto-scroll to bottom when messages change
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
         }
-    }); // Close useEffect
+    }, [messages]);
 
-    const handleSend = async (messageOverride?: string) => {
+    const handleSend = useCallback(async (messageOverride?: string) => {
         const messageToSend = messageOverride || input;
-        if (!messageToSend.trim() || isLoading) return;
+        if (!messageToSend.trim() || isLoadingRef.current) return;
 
         const userMsg = { role: "user", content: messageToSend };
         setMessages(prev => [...prev, userMsg]);
         setInput("");
         setIsLoading(true);
+        isLoadingRef.current = true;
 
         try {
-            // Prepare context
-            // Calculate current balance (sum of all transactions? roughly? or just pass recent history)
-            // Just passing history allows Gemini to infer balance trend if not absolute balance.
-
             const context = {
                 monthly_budget: budget,
-                history: transactions?.slice(0, 50), // Last 50 txs
-                forecast: forecast?.predicted_transactions?.slice(0, 30), // Next 30 days
+                history: transactions?.slice(0, 50),
+                forecast: forecast?.predicted_transactions?.slice(0, 30),
                 balance: "Calculated from recent history"
             };
 
@@ -71,6 +73,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, {}>((props, ref) => {
 
             if (data.message) {
                 setMessages(prev => [...prev, { role: "assistant", content: data.message }]);
+                onResponse?.(data.message);
             } else {
                 setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I couldn't generate a response." }]);
             }
@@ -79,14 +82,15 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, {}>((props, ref) => {
             setMessages(prev => [...prev, { role: "assistant", content: "I'm having trouble connecting right now." }]);
         } finally {
             setIsLoading(false);
+            isLoadingRef.current = false;
         }
-    };
+    }, [input, budget, transactions, forecast, messages, onResponse]);
 
     useImperativeHandle(ref, () => ({
         sendMessage: (message: string) => {
             handleSend(message);
         }
-    }));
+    }), [handleSend]);
 
     return (
         <div className="flex h-full flex-col rounded-2xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm overflow-hidden">
@@ -135,8 +139,10 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, {}>((props, ref) => {
                         className="w-full rounded-xl border border-zinc-700 bg-zinc-900 py-3 pl-4 pr-12 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
                     />
                     <button
+                        type="button"
                         onClick={() => handleSend()}
                         disabled={isLoading}
+                        aria-label="Send message"
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
                     >
                         <Send size={16} />

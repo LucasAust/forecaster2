@@ -1,0 +1,157 @@
+/**
+ * Merchant name normalization utility.
+ * Cleans raw bank-feed merchant names into human-readable names.
+ * Example: "ACH Withdrawal APPLECARD GSBANK PAYMENT" → "Apple Card"
+ */
+
+/** Known merchant name mappings: raw pattern → clean name */
+const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
+    // Payments / Cards
+    { pattern: /apple\s*card|applecard|gsbank/i, name: "Apple Card" },
+    { pattern: /sofi|sofi\s*bank/i, name: "SoFi" },
+    { pattern: /mazda\s*financial|mazda\s*fin/i, name: "Mazda Financial" },
+    { pattern: /chase/i, name: "Chase" },
+    { pattern: /wells\s*fargo/i, name: "Wells Fargo" },
+    { pattern: /bank\s*of\s*america|bofa/i, name: "Bank of America" },
+    { pattern: /capital\s*one/i, name: "Capital One" },
+    { pattern: /paypal/i, name: "PayPal" },
+
+    // Telecom
+    { pattern: /att\*?\s*bill|at&t|att\s+/i, name: "AT&T" },
+    { pattern: /t-?mobile/i, name: "T-Mobile" },
+    { pattern: /verizon/i, name: "Verizon" },
+    { pattern: /comcast|xfinity/i, name: "Xfinity" },
+    { pattern: /spectrum/i, name: "Spectrum" },
+
+    // Streaming / Subscriptions
+    { pattern: /netflix/i, name: "Netflix" },
+    { pattern: /spotify/i, name: "Spotify" },
+    { pattern: /hulu/i, name: "Hulu" },
+    { pattern: /disney\s*\+|disneyplus/i, name: "Disney+" },
+    { pattern: /hbo\s*max|hbo/i, name: "HBO Max" },
+    { pattern: /apple\s*music/i, name: "Apple Music" },
+    { pattern: /youtube\s*(premium|music)?/i, name: "YouTube" },
+    { pattern: /amazon\s*prime/i, name: "Amazon Prime" },
+    { pattern: /audible/i, name: "Audible" },
+    { pattern: /claude\.?ai|anthropic/i, name: "Claude AI" },
+    { pattern: /openai|chatgpt/i, name: "ChatGPT" },
+    { pattern: /adobe/i, name: "Adobe" },
+
+    // Food & Drink
+    { pattern: /starbucks/i, name: "Starbucks" },
+    { pattern: /mcdonald/i, name: "McDonald's" },
+    { pattern: /chick-?fil-?a/i, name: "Chick-fil-A" },
+    { pattern: /chipotle/i, name: "Chipotle" },
+    { pattern: /dunkin/i, name: "Dunkin'" },
+    { pattern: /wendy/i, name: "Wendy's" },
+    { pattern: /domino/i, name: "Domino's" },
+    { pattern: /panera/i, name: "Panera Bread" },
+    { pattern: /doordash/i, name: "DoorDash" },
+    { pattern: /grubhub/i, name: "Grubhub" },
+    { pattern: /uber\s*eat/i, name: "Uber Eats" },
+
+    // Transport
+    { pattern: /uber(?!\s*eat)/i, name: "Uber" },
+    { pattern: /lyft/i, name: "Lyft" },
+    { pattern: /chevron/i, name: "Chevron" },
+    { pattern: /shell\s*(oil)?/i, name: "Shell" },
+    { pattern: /exxon/i, name: "ExxonMobil" },
+
+    // Shopping
+    { pattern: /amazon(?!\s*prime)\.?com?/i, name: "Amazon" },
+    { pattern: /amazon\s*mkt/i, name: "Amazon" },
+    { pattern: /walmart/i, name: "Walmart" },
+    { pattern: /\btarget\b/i, name: "Target" },
+    { pattern: /costco/i, name: "Costco" },
+    { pattern: /best\s*buy/i, name: "Best Buy" },
+    { pattern: /home\s*depot/i, name: "Home Depot" },
+    { pattern: /ikea/i, name: "IKEA" },
+
+    // Groceries
+    { pattern: /whole\s*foods/i, name: "Whole Foods" },
+    { pattern: /trader\s*joe/i, name: "Trader Joe's" },
+    { pattern: /safeway/i, name: "Safeway" },
+    { pattern: /kroger/i, name: "Kroger" },
+    { pattern: /publix/i, name: "Publix" },
+    { pattern: /aldi/i, name: "Aldi" },
+
+    // Utilities
+    { pattern: /pg&?e|pacific\s*gas/i, name: "PG&E" },
+
+    // Insurance
+    { pattern: /geico/i, name: "GEICO" },
+    { pattern: /state\s*farm/i, name: "State Farm" },
+    { pattern: /progressive/i, name: "Progressive" },
+
+    // Health
+    { pattern: /cvs/i, name: "CVS Pharmacy" },
+    { pattern: /walgreens/i, name: "Walgreens" },
+
+    // Transfers
+    { pattern: /zelle/i, name: "Zelle" },
+    { pattern: /venmo/i, name: "Venmo" },
+    { pattern: /cash\s*app/i, name: "Cash App" },
+];
+
+/** Noise words to strip from raw merchant names */
+const NOISE_PATTERNS = [
+    /^(ach|pos|debit|credit|purchase|withdrawal|deposit|payment|online|recurring|check|chk|electronic)\s*/gi,
+    /\s*(ach|pos|debit|credit|purchase|withdrawal|deposit|payment|online|recurring|check|chk|electronic)\s*$/gi,
+    /\s+(inc|llc|ltd|corp|co|company|enterprises)\.?\s*$/gi,
+    /\s*#\d+\s*/g,     // Store numbers like #1234
+    /\s*\d{4,}\s*/g,   // Long number sequences (reference numbers)
+    /\s*\*+\s*/g,      // Asterisks used as separators
+    /\s{2,}/g,         // Multiple spaces → single space
+];
+
+/**
+ * Cleans a raw bank-feed merchant name into a human-readable format.
+ * 
+ * @param rawName - The raw merchant name from the bank feed
+ * @returns A cleaned, human-readable merchant name
+ */
+export function cleanMerchantName(rawName: string): string {
+    if (!rawName) return "Unknown";
+
+    // 1. Check known merchant mappings first
+    for (const { pattern, name } of MERCHANT_MAP) {
+        if (pattern.test(rawName)) {
+            return name;
+        }
+    }
+
+    // 2. Clean up the raw name
+    let cleaned = rawName;
+
+    // Remove noise patterns
+    for (const pattern of NOISE_PATTERNS) {
+        cleaned = cleaned.replace(pattern, " ");
+    }
+
+    // Trim and collapse whitespace
+    cleaned = cleaned.trim().replace(/\s+/g, " ");
+
+    // 3. Title case the result
+    if (cleaned.length > 0) {
+        cleaned = cleaned
+            .toLowerCase()
+            .split(" ")
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+    }
+
+    return cleaned || rawName;
+}
+
+/**
+ * Gets a display-friendly merchant name from a transaction object.
+ * Prefers merchant_name, falls back to name, then merchant field.
+ */
+export function getDisplayMerchant(tx: {
+    merchant_name?: string;
+    name?: string;
+    merchant?: string;
+}): string {
+    const raw = tx.merchant_name || tx.name || tx.merchant || "";
+    return cleanMerchantName(raw);
+}

@@ -1,13 +1,13 @@
 "use client";
 
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
 import { useEffect, useState } from "react";
-import { fetchForecast, processForecastData } from "@/lib/api";
+import { processForecastData } from "@/lib/api";
 import { useSync } from "@/contexts/SyncContext";
 
 export function BalanceChart({ className = "h-[200px]", days = 30 }: { className?: string, days?: number }) {
     const { forecast, loadingStage, balance } = useSync();
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<import("@/types").ForecastTimelinePoint[]>([]);
 
     useEffect(() => {
         if (forecast) {
@@ -72,9 +72,13 @@ export function BalanceChart({ className = "h-[200px]", days = 30 }: { className
                             backgroundColor: "#18181b",
                             border: "1px solid #27272a",
                             borderRadius: "8px",
+                            padding: "8px 12px",
                         }}
                         itemStyle={{ color: "#fff" }}
-                        formatter={(value: number) => [`$${value.toFixed(2)}`, "Balance"]}
+                        labelStyle={{ color: "#a1a1aa", marginBottom: "4px", fontSize: "12px" }}
+                        formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, "Balance"]}
+                        labelFormatter={(label) => `Date: ${label}`}
+                        cursor={{ stroke: "#3b82f6", strokeWidth: 1, strokeDasharray: "4 4" }}
                     />
                     <Area
                         type="monotone"

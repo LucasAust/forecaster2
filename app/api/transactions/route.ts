@@ -23,15 +23,14 @@ export async function GET(request: Request) {
         }
 
         if (!items || items.length === 0) {
-            console.log("No plaid items found for user");
             return NextResponse.json({ transactions: [], accounts: [] });
         }
 
         const { searchParams } = new URL(request.url);
         const force = searchParams.get('force') === 'true';
 
-        let allTransactions: any[] = [];
-        let allAccounts: any[] = [];
+        let allTransactions: Record<string, unknown>[] = [];
+        let allAccounts: Record<string, unknown>[] = [];
 
         for (const item of items) {
             try {
@@ -42,11 +41,8 @@ export async function GET(request: Request) {
 
                 // Check cache if not forced
                 if (!force && lastSynced && lastSynced > oneHourAgo && item.accounts_data) {
-                    console.log(`Serving transactions from cache for item ${item.item_id}`);
                     continue;
                 }
-
-                console.log(`Fetching transactions via transactionsSync for item ${item.item_id}...`);
 
                 const response = await plaidClient.transactionsSync({
                     access_token: accessToken,
@@ -58,12 +54,19 @@ export async function GET(request: Request) {
                     ...response.data.modified
                 ];
 
+                // Handle removed transactions
+                const removedIds = response.data.removed.map(r => r.transaction_id);
+                if (removedIds.length > 0) {
+                    await supabase
+                        .from('transactions')
+                        .delete()
+                        .in('transaction_id', removedIds);
+                }
+
                 const accountsResponse = await plaidClient.accountsGet({
                     access_token: accessToken,
                 });
                 const newAccounts = accountsResponse.data.accounts;
-
-                console.log(`Plaid Sync response for item ${item.item_id}: ${newTransactions.length} txns, ${newAccounts.length} accts`);
 
                 // Save to Supabase
                 if (newTransactions.length > 0) {
@@ -97,15 +100,14 @@ export async function GET(request: Request) {
                     })
                     .eq('item_id', item.item_id);
 
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error(`Error syncing item ${item.item_id}:`, err);
-                if (err.response) {
-                    console.error('Plaid Sync Error Details:', JSON.stringify(err.response.data, null, 2));
+                const plaidErr = err as { response?: { data?: unknown } };
+                if (plaidErr.response) {
+                    console.error('Plaid Sync Error Details:', JSON.stringify(plaidErr.response.data, null, 2));
                 }
             }
         }
-
-        console.log("Finished syncing all items. Fetching from DB...");
 
         // Finally, fetch ALL up-to-date transactions and accounts from DB/Supabase to return unified view
         const { data: finalItems, error: itemsError } = await supabase
@@ -124,8 +126,6 @@ export async function GET(request: Request) {
             .order('date', { ascending: false });
 
         if (txError) console.error("Error fetching final transactions:", txError);
-
-        console.log(`Returning ${finalTransactions?.length} transactions and ${allAccounts.length} accounts.`);
 
         allTransactions = finalTransactions || [];
 

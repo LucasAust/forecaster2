@@ -20,8 +20,8 @@ export function ChallengeForm({ factorId }: { factorId: string }) {
             await verifyEnrollment(factorId, code)
             router.push('/')
             router.refresh()
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Verification failed')
             setIsLoading(false)
         }
     }

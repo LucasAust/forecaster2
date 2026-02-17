@@ -13,7 +13,7 @@ export async function POST(request: Request) {
         const payload = await request.json();
         const { monthly_budget, display_name } = payload;
 
-        let updateData: any = { user_id: user.id };
+        let updateData: Record<string, string | number> = { user_id: user.id };
 
         if (monthly_budget !== undefined && monthly_budget !== null) {
             if (isNaN(Number(monthly_budget))) {
@@ -23,7 +23,10 @@ export async function POST(request: Request) {
         }
 
         if (display_name !== undefined) {
-            updateData.display_name = display_name;
+            if (typeof display_name !== 'string' || display_name.length > 100) {
+                return NextResponse.json({ error: 'Display name must be a string under 100 characters' }, { status: 400 });
+            }
+            updateData.display_name = display_name.trim();
         }
 
         if (Object.keys(updateData).length <= 1) { // Only user_id

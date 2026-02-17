@@ -2,6 +2,11 @@
 
 import { createClient } from '@/utils/supabase/server'
 import QRCode from 'qrcode'
+import { generateOTPCode, sendMFACode } from '@/lib/email'
+import { setEmailMfaVerified, clearEmailMfaCookie } from '@/lib/mfa-session'
+import { checkRateLimit } from '@/lib/rate-limit'
+
+// ─── TOTP MFA ────────────────────────────────────────────────
 
 export async function enrollMFA() {
     const supabase = await createClient()
@@ -24,6 +29,15 @@ export async function enrollMFA() {
     }
 
     const qrCode = await QRCode.toDataURL(data.totp.uri)
+
+    // Mark MFA method as TOTP in user_settings
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+        await supabase.from('user_settings').upsert(
+            { user_id: user.id, mfa_method: 'totp' },
+            { onConflict: 'user_id' }
+        )
+    }
 
     return {
         id: data.id,
@@ -55,4 +69,172 @@ export async function unenrollMFA(factorId: string) {
     if (error) {
         throw new Error(error.message)
     }
+
+    // Clear MFA method
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+        await supabase.from('user_settings').upsert(
+            { user_id: user.id, mfa_method: null },
+            { onConflict: 'user_id' }
+        )
+    }
+}
+
+// ─── Email MFA ───────────────────────────────────────────────
+
+export async function enrollEmailMFA() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user?.email) {
+        throw new Error('No email address associated with this account')
+    }
+
+    // Unenroll any existing TOTP factors first
+    const { data: factors } = await supabase.auth.mfa.listFactors()
+    for (const factor of factors?.all || []) {
+        await supabase.auth.mfa.unenroll({ factorId: factor.id })
+    }
+
+    // Set MFA method to email
+    await supabase.from('user_settings').upsert(
+        { user_id: user.id, mfa_method: 'email' },
+        { onConflict: 'user_id' }
+    )
+
+    // Send initial verification code to confirm enrollment
+    const code = generateOTPCode()
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+
+    await supabase.from('mfa_email_codes').insert({
+        user_id: user.id,
+        code,
+        expires_at: expiresAt,
+    })
+
+    await sendMFACode(user.email, code)
+
+    return { email: user.email }
+}
+
+export async function sendEmailMFAChallenge() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user?.email) {
+        throw new Error('No email address found')
+    }
+
+    // Rate limit: max 3 emails per 5 minutes
+    const rateCheck = checkRateLimit(`mfa-email:${user.id}`, { maxRequests: 3, windowSeconds: 300 })
+    if (!rateCheck.allowed) {
+        throw new Error(`Too many code requests. Try again in ${rateCheck.resetIn}s.`)
+    }
+
+    // Invalidate any existing unused codes
+    await supabase
+        .from('mfa_email_codes')
+        .update({ used: true })
+        .eq('user_id', user.id)
+        .eq('used', false)
+
+    const code = generateOTPCode()
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+
+    await supabase.from('mfa_email_codes').insert({
+        user_id: user.id,
+        code,
+        expires_at: expiresAt,
+    })
+
+    await sendMFACode(user.email, code)
+
+    return { email: maskEmail(user.email) }
+}
+
+export async function verifyEmailMFACode(code: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Not authenticated')
+    }
+
+    // Brute-force protection: max 5 attempts per 5 minutes
+    const rateCheck = checkRateLimit(`mfa-verify:${user.id}`, { maxRequests: 5, windowSeconds: 300 })
+    if (!rateCheck.allowed) {
+        throw new Error(`Too many verification attempts. Try again in ${rateCheck.resetIn}s.`)
+    }
+
+    // Find valid code
+    const { data: codeRow } = await supabase
+        .from('mfa_email_codes')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('code', code)
+        .eq('used', false)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+    if (!codeRow) {
+        throw new Error('Invalid or expired code')
+    }
+
+    // Mark code as used
+    await supabase
+        .from('mfa_email_codes')
+        .update({ used: true })
+        .eq('id', codeRow.id)
+
+    // Set the email MFA verified cookie
+    await setEmailMfaVerified(user.id)
+
+    return { success: true }
+}
+
+export async function unenrollEmailMFA() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Not authenticated')
+    }
+
+    // Clear MFA method
+    await supabase.from('user_settings').upsert(
+        { user_id: user.id, mfa_method: null },
+        { onConflict: 'user_id' }
+    )
+
+    // Clean up any pending codes
+    await supabase
+        .from('mfa_email_codes')
+        .delete()
+        .eq('user_id', user.id)
+
+    await clearEmailMfaCookie()
+}
+
+export async function getMfaMethod(): Promise<string | null> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data } = await supabase
+        .from('user_settings')
+        .select('mfa_method')
+        .eq('user_id', user.id)
+        .single()
+
+    return data?.mfa_method || null
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+
+function maskEmail(email: string): string {
+    const [local, domain] = email.split('@')
+    if (local.length <= 2) return `${local[0]}***@${domain}`
+    return `${local[0]}${local[1]}***@${domain}`
 }

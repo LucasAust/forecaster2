@@ -1,19 +1,40 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #09090b; /* zinc-950 */
-  --color-foreground: #fafafa; /* zinc-50 */
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --color-primary: #3b82f6; /* blue-500 */
-  --color-secondary: #a1a1aa; /* zinc-400 */
+  --color-secondary: var(--text-secondary);
   --color-accent: #8b5cf6; /* violet-500 */
-  --color-card: #18181b; /* zinc-900 */
-  --color-card-foreground: #fafafa;
-  --color-border: #27272a; /* zinc-800 */
+  --color-card: var(--surface-card);
+  --color-card-foreground: var(--fg);
+  --color-border: var(--border-color);
 }
 
-:root {
+/* Dark theme (default) */
+:root, :root.dark {
+  --bg: #09090b;
+  --fg: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --surface-card: #18181b;
+  --border-color: #27272a;
   --background: #09090b;
   --foreground: #fafafa;
+  color-scheme: dark;
+}
+
+/* Light theme */
+:root.light {
+  --bg: #ffffff;
+  --fg: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --surface-card: #f4f4f5;
+  --border-color: #e4e4e7;
+  --background: #ffffff;
+  --foreground: #18181b;
+  color-scheme: light;
 }
 
 body {
@@ -27,14 +48,71 @@ body {
 /* Glassmorphism utilities */
 .glass {
   background: rgba(24, 24, 27, 0.7);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+:root.light .glass {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .glass-card {
   background: linear-gradient(145deg, rgba(39, 39, 42, 0.4) 0%, rgba(24, 24, 27, 0.4) 100%);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
+:root.light .glass-card {
+  background: linear-gradient(145deg, rgba(244, 244, 245, 0.6) 0%, rgba(228, 228, 231, 0.3) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Light mode overrides for common Tailwind dark-color utilities ── */
+:root.light .bg-zinc-950\/50,
+:root.light .bg-zinc-950 { background-color: #ffffff !important; }
+
+:root.light .bg-zinc-900\/50,
+:root.light .bg-zinc-900 { background-color: #fafafa !important; }
+
+:root.light .bg-zinc-800\/50,
+:root.light .bg-zinc-800 { background-color: #f4f4f5 !important; }
+
+:root.light .border-zinc-800\/50,
+:root.light .border-zinc-800 { border-color: #e4e4e7 !important; }
+
+:root.light .border-zinc-700 { border-color: #d4d4d8 !important; }
+
+:root.light .text-white { color: #18181b !important; }
+:root.light .text-zinc-100 { color: #27272a !important; }
+:root.light .text-zinc-200 { color: #3f3f46 !important; }
+:root.light .text-zinc-300 { color: #52525b !important; }
+:root.light .text-zinc-400 { color: #71717a !important; }
+:root.light .text-zinc-500 { color: #a1a1aa !important; }
+
+:root.light .ring-zinc-800 { --tw-ring-color: #e4e4e7 !important; }
+
+/* Sidebar & navigation */
+:root.light .bg-black\/30 { background-color: rgba(0, 0, 0, 0.05) !important; }
+:root.light .bg-white\/5 { background-color: rgba(0, 0, 0, 0.04) !important; }
+:root.light .bg-white\/10 { background-color: rgba(0, 0, 0, 0.06) !important; }
+
+/* Input fields */
+:root.light input,
+:root.light textarea,
+:root.light select {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+  border-color: #d4d4d8 !important;
+}
+:root.light input::placeholder,
+:root.light textarea::placeholder {
+  color: #a1a1aa !important;
+}
+
+/* Scrollbar */
+:root.light ::-webkit-scrollbar-track { background: #f4f4f5; }
+:root.light ::-webkit-scrollbar-thumb { background: #d4d4d8; }
+:root.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { geminiClient } from '@/lib/gemini';
 import { createClient } from '@/utils/supabase/server';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
     const supabase = await createClient();
@@ -10,6 +11,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Rate limit check
+    const rateCheck = checkRateLimit(`suggestions:${user.id}`, RATE_LIMITS.suggestions);
+    if (!rateCheck.allowed) {
+        return NextResponse.json(
+            { error: `Rate limit exceeded. Try again in ${rateCheck.resetIn}s.` },
+            { status: 429, headers: { 'Retry-After': String(rateCheck.resetIn) } }
+        );
+    }
+
     try {
         const { history, forecast } = await request.json();
 
@@ -17,18 +27,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing history or forecast data' }, { status: 400 });
         }
 
-        console.log("Generating AI suggestions...");
         const suggestionsData = await geminiClient.generateSuggestions(history, forecast);
         const suggestions = suggestionsData.suggestions || [];
 
-        // Save to DB
-        // Check if exists first to update, or just upsert?
-        // Since we want one row per user (or history?), let's say one row for "latest suggestions".
-        // The table has `id` PK. We can query by `user_id`.
+        // Clean up old suggestions — keep only the latest 3 per user
+        const { data: oldRows } = await supabase
+            .from('ai_suggestions')
+            .select('id')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
 
-        // Let's delete old ones or update? Or just a single row per user strategy?
-        // Schema doesn't enforce single row. But for simplicity let's keep one "latest" row or just insert new ones and query latest.
-        // Query logic: `order('created_at', { ascending: false }).limit(1)`
+        if (oldRows && oldRows.length >= 3) {
+            const idsToDelete = oldRows.slice(2).map(r => r.id);
+            await supabase.from('ai_suggestions').delete().in('id', idsToDelete);
+        }
 
         await supabase.from('ai_suggestions').insert({
             user_id: user.id,

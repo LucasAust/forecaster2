@@ -14,6 +14,11 @@ export async function POST(request: Request) {
 
     try {
         const { public_token } = await request.json();
+
+        if (!public_token || typeof public_token !== 'string') {
+            return NextResponse.json({ error: 'public_token is required' }, { status: 400 });
+        }
+
         const response = await plaidClient.itemPublicTokenExchange({
             public_token: public_token,
         });
@@ -33,7 +38,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Failed to save access token' }, { status: 500 });
         }
 
-        return NextResponse.json({ access_token, item_id });
+        return NextResponse.json({ success: true, item_id });
     } catch (error) {
         console.error('Error exchanging token:', error);
         return NextResponse.json({ error: 'Failed to exchange token' }, { status: 500 });

@@ -4,8 +4,13 @@ import { BalanceChart } from "./BalanceChart";
 import { useSync } from "@/contexts/SyncContext";
 import { useMemo } from "react";
 import { processForecastData } from "@/lib/api";
+import { MessageSquare, TrendingUp } from "lucide-react";
 
-export function ScenarioOutput() {
+interface ScenarioOutputProps {
+    scenarioAnalysis?: string | null;
+}
+
+export function ScenarioOutput({ scenarioAnalysis }: ScenarioOutputProps) {
     const { forecast, balance, loadingStage } = useSync();
 
     const stats = useMemo(() => {
@@ -31,17 +36,39 @@ export function ScenarioOutput() {
 
     if (loadingStage === 'forecast') return <div className="text-zinc-500">Loading scenario data...</div>;
 
-    if (!stats) return (
-        <div className="text-zinc-500 flex flex-col items-center justify-center h-full">
-            <p>No scenario data available</p>
-            <p className="text-xs mt-1">Connect a bank account to generate predictions</p>
+    if (!stats && !scenarioAnalysis) return (
+        <div className="glass-card flex flex-col items-center justify-center h-full rounded-2xl p-8 text-center">
+            <div className="rounded-full bg-zinc-800/50 p-4 mb-4">
+                <MessageSquare className="h-8 w-8 text-zinc-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-zinc-300 mb-2">No Scenario Yet</h3>
+            <p className="text-sm text-zinc-500 max-w-xs">
+                Run a scenario using the chat panel or preset buttons to see its projected impact on your finances.
+            </p>
         </div>
     );
 
     return (
         <div className="flex h-full flex-col space-y-6">
+            {/* AI Scenario Analysis */}
+            {scenarioAnalysis && (
+                <div className="glass-card rounded-2xl p-6">
+                    <h2 className="mb-3 text-lg font-semibold text-white flex items-center gap-2">
+                        <TrendingUp size={18} className="text-blue-400" />
+                        Scenario Analysis
+                    </h2>
+                    <div className="prose prose-invert prose-sm max-w-none text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                        {scenarioAnalysis}
+                    </div>
+                </div>
+            )}
+
+            {/* Baseline Forecast Reference */}
+            {stats && (
             <div className="glass-card flex-1 rounded-2xl p-6">
-                <h2 className="mb-4 text-lg font-semibold text-white">Projected Impact</h2>
+                <h2 className="mb-4 text-lg font-semibold text-white">
+                    {scenarioAnalysis ? "Current Forecast (Baseline)" : "Projected Impact"}
+                </h2>
                 <BalanceChart className="h-[250px]" />
                 <div className="mt-6 grid grid-cols-3 gap-4">
                     <div className="rounded-xl bg-zinc-800/50 p-4 text-center">
@@ -67,6 +94,7 @@ export function ScenarioOutput() {
                     </div>
                 </div>
             </div>
+            )}
         </div>
     );
 }

@@ -1,18 +1,22 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-
+import { useEffect, useState } from "react";
 import { useSync } from "@/contexts/SyncContext";
+import { inferCategory } from "@/lib/categories";
+import type { Transaction, CategoryBucket } from "@/types";
 
-export function BudgetHistogram({ transactions: propTransactions }: { transactions?: any[] }) {
+export function BudgetHistogram({ transactions: propTransactions }: { transactions?: Transaction[] }) {
     const { transactions: contextTransactions } = useSync();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     // "This Month" data source (Mixed Actuals + Forecast if provided, else just Actuals from context)
     const transactions = propTransactions || contextTransactions;
     // "History" data source (Always Actuals from context)
     const historicalTransactions = contextTransactions;
 
-    if (!transactions) return <div className="h-[300px] w-full flex items-center justify-center text-zinc-500">Loading...</div>;
+    if (!mounted || !transactions) return <div className="h-[300px] w-full flex items-center justify-center text-zinc-500">Loading...</div>;
 
     // Calculate monthly totals by category
     const now = new Date();
@@ -21,10 +25,10 @@ export function BudgetHistogram({ transactions: propTransactions }: { transactio
     const currentYear = now.getFullYear();
     const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-    const totals: any = {};
+    const totals: Record<string, CategoryBucket> = {};
 
     // 1. Process "This Month"
-    transactions.forEach((tx: any) => {
+    transactions.forEach((tx) => {
         const date = new Date(tx.date);
         const month = date.getMonth();
         const year = date.getFullYear();
@@ -35,8 +39,7 @@ export function BudgetHistogram({ transactions: propTransactions }: { transactio
         // Safety check for current month/year, although propTransactions should be pre-filtered by BudgetPage mostly.
         // BudgetPage sends "combinedTransactions" which is strictly current month.
         if (month === currentMonth && year === currentYear && tx.amount > 0) {
-            let category = tx.category?.[0] || tx.category || "Other";
-            if (category === "Uncategorized") category = "Other";
+            const category = inferCategory(tx);
             if (!totals[category]) totals[category] = { name: category, thisMonth: 0, lastMonth: 0 };
             totals[category].thisMonth += Math.abs(tx.amount);
         }
@@ -44,15 +47,14 @@ export function BudgetHistogram({ transactions: propTransactions }: { transactio
 
     // 2. Process "Last Month"
     if (historicalTransactions) {
-        historicalTransactions.forEach((tx: any) => {
+        historicalTransactions.forEach((tx) => {
             if (tx.amount > 0) {
                 const date = new Date(tx.date);
                 const month = date.getMonth();
                 const year = date.getFullYear();
 
                 if (month === lastMonth && year === lastMonthYear) {
-                    let category = tx.category?.[0] || "Other";
-                    if (category === "Uncategorized") category = "Other";
+                    const category = inferCategory(tx);
                     if (!totals[category]) totals[category] = { name: category, thisMonth: 0, lastMonth: 0 };
                     totals[category].lastMonth += tx.amount;
                 }
@@ -61,13 +63,13 @@ export function BudgetHistogram({ transactions: propTransactions }: { transactio
     }
 
     const data = Object.values(totals)
-        .sort((a: any, b: any) => (b.thisMonth + b.lastMonth) - (a.thisMonth + a.lastMonth))
+        .sort((a, b) => (b.thisMonth + b.lastMonth) - (a.thisMonth + a.lastMonth))
         .slice(0, 5);
 
     if (data.length === 0) return <div className="h-[300px] w-full flex items-center justify-center text-zinc-500">No data available for comparison</div>;
 
     return (
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full min-h-[100px] min-w-[100px]">
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                     data={data}

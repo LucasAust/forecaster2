@@ -11,11 +11,22 @@ export default async function EnrollPage() {
         redirect('/login')
     }
 
-    // Check if already enrolled
+    // Check if already enrolled (TOTP)
     const { data: factors } = await supabase.auth.mfa.listFactors()
     const hasVerifiedFactor = factors?.all?.some(f => f.status === 'verified')
 
     if (hasVerifiedFactor) {
+        redirect('/')
+    }
+
+    // Check if already enrolled (email MFA)
+    const { data: settings } = await supabase
+        .from('user_settings')
+        .select('mfa_method')
+        .eq('user_id', user.id)
+        .single()
+
+    if (settings?.mfa_method === 'email') {
         redirect('/')
     }
 

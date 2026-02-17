@@ -2,29 +2,33 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchTransactions, fetchForecast } from '@/lib/api';
+import type { Transaction, Forecast, PlaidAccount, LoadingStage, SyncState } from '@/types';
 
-interface SyncContextType {
-    isSyncing: boolean;
-    syncProgress: number; // 0 to 100
-    lastUpdated: Date | null;
-    triggerUpdate: () => Promise<void>;
-    transactions: any[];
-    forecast: any;
-    balance: number;
-    loadingStage: 'idle' | 'transactions' | 'forecast' | 'complete';
-    error: string | null;
+const SyncContext = createContext<SyncState | undefined>(undefined);
+
+/** Calculate total balance from accounts (assets - liabilities) */
+function calculateBalance(accounts: PlaidAccount[]): number {
+    return accounts.reduce((acc, account) => {
+        const bal = account.balances.current || 0;
+        if (account.type === 'depository' || account.type === 'investment') {
+            return acc + bal;
+        } else if (account.type === 'credit' || account.type === 'loan') {
+            return acc - bal;
+        }
+        return acc;
+    }, 0);
 }
-
-const SyncContext = createContext<SyncContextType | undefined>(undefined);
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncProgress, setSyncProgress] = useState(0);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [transactions, setTransactions] = useState<any[]>([]);
-    const [forecast, setForecast] = useState<any>(null);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [forecast, setForecast] = useState<Forecast | null>(null);
     const [balance, setBalance] = useState(0);
-    const [loadingStage, setLoadingStage] = useState<'idle' | 'transactions' | 'forecast' | 'complete'>('idle');
+    const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
+    const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
+    const [error, setError] = useState<string | null>(null);
 
     // Load initial data from cache on mount
     useEffect(() => {
@@ -32,45 +36,34 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const loadInitialData = async () => {
+        if (isSyncing) return;
+        setIsSyncing(true);
         try {
             setLoadingStage('transactions');
-            const data = await fetchTransactions(); // Default: force=false (cache)
+            setError(null);
+            const data = await fetchTransactions();
             setTransactions(data.transactions || []);
 
-            // Calculate balance from accounts
             if (data.accounts) {
-                console.log("Processing accounts for balance:", data.accounts);
-                const totalBalance = data.accounts.reduce((acc: number, account: any) => {
-                    const balance = account.balances.current || 0;
-
-                    if (account.type === 'depository' || account.type === 'investment') {
-                        // Assets: Add to balance
-                        return acc + balance;
-                    } else if (account.type === 'credit' || account.type === 'loan') {
-                        // Liabilities: Subtract from balance
-                        return acc - balance;
-                    }
-                    return acc;
-                }, 0);
-                console.log("Calculated Total Balance:", totalBalance);
-                setBalance(totalBalance);
+                setAccounts(data.accounts);
+                setBalance(calculateBalance(data.accounts));
             }
 
             if (data.transactions && data.transactions.length > 0) {
                 setLoadingStage('forecast');
-                const fc = await fetchForecast(data.transactions); // Default: force=false (cache)
+                const fc = await fetchForecast(data.transactions);
                 setForecast(fc);
             }
             setLoadingStage('complete');
             setLastUpdated(new Date());
         } catch (e) {
             console.error("Initial load failed", e);
-            // Ensure we don't get stuck in loading state even if sync fails
-            setLoadingStage('complete');
+            setError("Failed to load your financial data. Please refresh.");
+            setLoadingStage('idle');
+        } finally {
+            setIsSyncing(false);
         }
     };
-
-    const [error, setError] = useState<string | null>(null);
 
     const triggerUpdate = useCallback(async () => {
         if (isSyncing) return;
@@ -80,48 +73,27 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         setLoadingStage('transactions');
 
         try {
-            // Step 1: Force Sync Transactions (Home Page Priority)
-            console.log("Fetching transactions...");
-            const data = await fetchTransactions(true); // force=true
-            console.log("Transactions fetched:", data.transactions?.length);
+            const data = await fetchTransactions(true);
             setTransactions(data.transactions || []);
 
-            // Calculate balance from accounts
             if (data.accounts) {
-                console.log("Processing accounts for balance (Update):", data.accounts);
-                const totalBalance = data.accounts.reduce((acc: number, account: any) => {
-                    const balance = account.balances.current || 0;
-
-                    if (account.type === 'depository' || account.type === 'investment') {
-                        return acc + balance;
-                    } else if (account.type === 'credit' || account.type === 'loan') {
-                        return acc - balance;
-                    }
-                    return acc;
-                }, 0);
-                console.log("Calculated Total Balance (Update):", totalBalance);
-                setBalance(totalBalance);
+                setAccounts(data.accounts);
+                setBalance(calculateBalance(data.accounts));
             }
 
             setSyncProgress(50);
             setLoadingStage('forecast');
 
-            // Step 2: Force Sync Forecast (Background/Next Priority)
             if (data.transactions && data.transactions.length > 0) {
-                const fc = await fetchForecast(data.transactions, true); // force=true
+                const fc = await fetchForecast(data.transactions, true);
                 setForecast(fc);
 
-                // Step 3: Trigger AI Suggestions (Background)
-                // We don't await this to keep UI responsive, or maybe we do?
-                // User said "generate when a user connects a bank or updates predictions"
-                // It's better to fire and forget or let it run in background.
-                console.log("Triggering AI Suggestions update...");
+                // Fire-and-forget suggestions update
                 fetch('/api/suggestions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ history: data.transactions, forecast: fc })
-                }).then(() => console.log("AI Suggestions updated"))
-                    .catch(e => console.error("Failed to update suggestions", e));
+                }).catch(e => console.error("Failed to update suggestions", e));
             }
 
             setSyncProgress(100);
@@ -130,6 +102,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
             console.error("Sync failed", err);
             setError("Failed to sync data. Please try again.");
+            setLoadingStage('complete');
         } finally {
             setIsSyncing(false);
             setTimeout(() => setSyncProgress(0), 2000);
@@ -145,6 +118,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             transactions,
             forecast,
             balance,
+            accounts,
             loadingStage,
             error
         }}>

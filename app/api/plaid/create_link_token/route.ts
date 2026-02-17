@@ -21,10 +21,11 @@ export async function POST(request: Request) {
             language: 'en',
         });
         return NextResponse.json(response.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error creating link token:', error);
-        if (error.response) {
-            console.error('Plaid error details:', JSON.stringify(error.response.data, null, 2));
+        const err = error as { response?: { data?: unknown } };
+        if (err.response) {
+            console.error('Plaid error details:', JSON.stringify(err.response.data, null, 2));
         }
         return NextResponse.json({ error: 'Failed to create link token' }, { status: 500 });
     }

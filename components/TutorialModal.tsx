@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { X, ChevronRight, ChevronLeft, Wallet, LineChart, PieChart, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
@@ -61,7 +63,9 @@ export function TutorialModal({ onClose }: TutorialModalProps) {
             <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
                 {/* Close Button */}
                 <button
+                    type="button"
                     onClick={onClose}
+                    aria-label="Close tutorial"
                     className="absolute right-4 top-4 rounded-full p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
                 >
                     <X className="h-5 w-5" />
@@ -93,6 +97,7 @@ export function TutorialModal({ onClose }: TutorialModalProps) {
                 {/* Controls */}
                 <div className="flex items-center justify-between mt-4">
                     <button
+                        type="button"
                         onClick={handlePrev}
                         disabled={currentStep === 0}
                         className={clsx(
@@ -105,6 +110,7 @@ export function TutorialModal({ onClose }: TutorialModalProps) {
                     </button>
 
                     <button
+                        type="button"
                         onClick={handleNext}
                         className="flex items-center gap-2 rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-black hover:bg-zinc-200 transition-transform active:scale-95"
                     >

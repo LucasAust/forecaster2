@@ -7,7 +7,10 @@ import { processForecastData } from "@/lib/api";
 
 export function ForecastGraph({ days = 30 }: { days?: number }) {
     const { forecast, balance, loadingStage } = useSync();
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<import("@/types").ForecastTimelinePoint[]>([]);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
 
     useEffect(() => {
         if (forecast) {
@@ -15,6 +18,8 @@ export function ForecastGraph({ days = 30 }: { days?: number }) {
             setData(processed.slice(0, days));
         }
     }, [forecast, balance, days]);
+
+    if (!mounted) return <div className="h-[400px] w-full flex items-center justify-center text-zinc-500">Loading...</div>;
 
     if (loadingStage === 'forecast') return <div className="h-[400px] w-full flex items-center justify-center text-zinc-500">Loading forecast...</div>;
 
@@ -26,7 +31,7 @@ export function ForecastGraph({ days = 30 }: { days?: number }) {
     );
 
     return (
-        <div className="h-[400px] w-full">
+        <div className="h-[400px] w-full min-h-[100px] min-w-[100px]">
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />

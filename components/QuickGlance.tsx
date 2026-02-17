@@ -2,13 +2,12 @@
 
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { fetchForecast } from "@/lib/api";
-
+import { getDisplayMerchant } from "@/lib/merchants";
 import { useSync } from "@/contexts/SyncContext";
 
 export function QuickGlance() {
     const { forecast } = useSync();
-    const [upcoming, setUpcoming] = useState<any[]>([]);
+    const [upcoming, setUpcoming] = useState<import("@/types").PredictedTransaction[]>([]);
 
     useEffect(() => {
         if (forecast && forecast.predicted_transactions) {
@@ -20,6 +19,13 @@ export function QuickGlance() {
     }, [forecast]);
 
     if (!forecast) return <div className="text-sm text-zinc-500">Loading...</div>;
+
+    if (upcoming.length === 0) return (
+        <div className="text-sm text-zinc-500 text-center py-4">
+            <p>No upcoming predictions yet.</p>
+            <p className="text-xs mt-1">Connect a bank account to see forecasted transactions.</p>
+        </div>
+    );
 
     return (
         <div className="flex space-x-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -34,10 +40,10 @@ export function QuickGlance() {
                             {item.type === 'income' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                         </div>
                         <span className={`text-sm font-bold ${item.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {item.type === 'income' ? '+' : ''}{Math.abs(item.amount)}
+                            {item.type === 'income' ? '+' : '−'}${Math.abs(item.amount).toFixed(2)}
                         </span>
                     </div>
-                    <p className="mt-2 truncate text-sm font-medium text-zinc-200">{item.merchant}</p>
+                    <p className="mt-2 truncate text-sm font-medium text-zinc-200" title={getDisplayMerchant(item)}>{getDisplayMerchant(item)}</p>
                 </div>
             ))}
         </div>

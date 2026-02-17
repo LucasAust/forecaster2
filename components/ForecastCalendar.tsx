@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSync } from "@/contexts/SyncContext";
 import { processForecastData } from "@/lib/api";
+import type { ForecastTimelinePoint } from "@/types";
 
 export function ForecastCalendar() {
     const { forecast, balance, loadingStage } = useSync();
-    const [days, setDays] = useState<any[]>([]);
+    const [days, setDays] = useState<ForecastTimelinePoint[]>([]);
 
     useEffect(() => {
         if (forecast) {
@@ -41,7 +41,7 @@ export function ForecastCalendar() {
                             <td className="px-6 py-4 font-medium text-white">
                                 {new Date(day.fullDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 <div className="text-xs text-zinc-500 font-normal mt-0.5">
-                                    {day.transactions.map((t: any) => t.merchant).join(", ")}
+                                    {day.transactions.map((t) => t.merchant).join(", ")}
                                 </div>
                             </td>
                             <td className="px-6 py-4 text-emerald-500">

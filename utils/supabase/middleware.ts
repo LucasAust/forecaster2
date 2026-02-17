@@ -1,11 +1,37 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
+
+const MFA_COOKIE_NAME = 'arc_email_mfa'
+const MFA_MAX_AGE = 12 * 60 * 60 * 1000 // 12 hours in ms
+
+function getMfaSecret(): string {
+    const secret = process.env.MFA_COOKIE_SECRET
+    if (!secret) {
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error('MFA_COOKIE_SECRET must be set in production')
+        }
+        return 'dev-only-mfa-secret-not-for-production'
+    }
+    return secret
+}
+
+function verifyEmailMfaCookie(cookieValue: string | undefined, userId: string): boolean {
+    if (!cookieValue) return false
+    const parts = cookieValue.split(':')
+    if (parts.length !== 3) return false
+    const [cookieUserId, timestamp, signature] = parts
+    if (cookieUserId !== userId) return false
+    const payload = `${cookieUserId}:${timestamp}`
+    const expected = createHmac('sha256', getMfaSecret()).update(payload).digest('hex')
+    const a = Buffer.from(signature)
+    const b = Buffer.from(expected)
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return false
+    if (Date.now() - Number(timestamp) > MFA_MAX_AGE) return false
+    return true
+}
 
 export async function updateSession(request: NextRequest) {
-    console.log("Middleware checking env vars:");
-    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Defined" : "Missing");
-    console.log("Key:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Defined" : "Missing");
-
     let supabaseResponse = NextResponse.next({
         request,
     })
@@ -54,31 +80,63 @@ export async function updateSession(request: NextRequest) {
     if (user && !request.nextUrl.pathname.startsWith('/auth') && !request.nextUrl.pathname.startsWith('/login')) {
         const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
 
-        // If AAL2, we are good.
+        // If AAL2 (TOTP verified), we are good
         if (mfaData && mfaData.currentLevel === 'aal2') {
             return supabaseResponse
         }
 
-        // Check for verified factors
+        // Check for verified TOTP factors
         const { data: factors } = await supabase.auth.mfa.listFactors()
-        const hasVerifiedFactor = factors?.all?.some(f => f.status === 'verified')
+        const hasVerifiedTotpFactor = factors?.all?.some(f => f.status === 'verified')
 
-        if (!hasVerifiedFactor) {
-            // No verified factors -> Force Enrollment
-            if (!request.nextUrl.pathname.startsWith('/auth/mfa/enroll')) {
-                const url = request.nextUrl.clone()
-                url.pathname = '/auth/mfa/enroll'
-                return NextResponse.redirect(url)
-            }
-        } else {
-            // Has factors, but not AAL2 -> Force verification
+        if (hasVerifiedTotpFactor) {
+            // Has TOTP factors, but not AAL2 -> Force TOTP verification
             if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
                 if (!request.nextUrl.pathname.startsWith('/auth/mfa/challenge')) {
+                    if (request.nextUrl.pathname.startsWith('/api')) {
+                        return NextResponse.json({ error: 'MFA verification required' }, { status: 403 })
+                    }
                     const url = request.nextUrl.clone()
                     url.pathname = '/auth/mfa/challenge'
                     return NextResponse.redirect(url)
                 }
             }
+            return supabaseResponse
+        }
+
+        // No TOTP factors — check for email MFA
+        const { data: settings } = await supabase
+            .from('user_settings')
+            .select('mfa_method')
+            .eq('user_id', user.id)
+            .single()
+
+        if (settings?.mfa_method === 'email') {
+            // Check email MFA cookie
+            const emailMfaCookie = request.cookies.get(MFA_COOKIE_NAME)?.value
+            if (verifyEmailMfaCookie(emailMfaCookie, user.id)) {
+                return supabaseResponse
+            }
+            // Not verified — redirect to email challenge
+            if (!request.nextUrl.pathname.startsWith('/auth/mfa/challenge')) {
+                if (request.nextUrl.pathname.startsWith('/api')) {
+                    return NextResponse.json({ error: 'MFA verification required' }, { status: 403 })
+                }
+                const url = request.nextUrl.clone()
+                url.pathname = '/auth/mfa/challenge'
+                return NextResponse.redirect(url)
+            }
+            return supabaseResponse
+        }
+
+        // No MFA configured at all -> Force Enrollment
+        if (!request.nextUrl.pathname.startsWith('/auth/mfa/enroll')) {
+            if (request.nextUrl.pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'MFA enrollment required' }, { status: 403 })
+            }
+            const url = request.nextUrl.clone()
+            url.pathname = '/auth/mfa/enroll'
+            return NextResponse.redirect(url)
         }
     }
 

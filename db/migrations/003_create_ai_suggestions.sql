@@ -11,14 +11,17 @@ create table if not exists public.ai_suggestions (
 alter table public.ai_suggestions enable row level security;
 
 -- Policies
+drop policy if exists "Users can view their own suggestions" on public.ai_suggestions;
 create policy "Users can view their own suggestions"
   on public.ai_suggestions for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can check their own suggestions" on public.ai_suggestions;
 create policy "Users can check their own suggestions"
   on public.ai_suggestions for all
   using (auth.uid() = user_id);
 
 -- Trigger for updated_at
+drop trigger if exists handle_updated_at on public.ai_suggestions;
 create trigger handle_updated_at before update on public.ai_suggestions
-  for each row execute procedure moddatetime (updated_at);
+  for each row execute procedure public.handle_updated_at();

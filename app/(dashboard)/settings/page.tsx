@@ -1,26 +1,43 @@
 import { Shield } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { MfaManager } from './MfaManager';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { ProfileSection, ConnectedAccountsSection, DataExportSection, KeyboardShortcutsSection, DangerZone } from '@/components/SettingsClient';
+import { redirect } from 'next/navigation';
 
 export default async function SettingsPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-        return null;
+        redirect('/login');
     }
 
     const { data: factors } = await supabase.auth.mfa.listFactors();
-    const hasMfa = factors?.all?.some(f => f.status === 'verified');
+    const hasTotpMfa = factors?.all?.some(f => f.factor_type === 'totp' && f.status === 'verified');
+
+    // Fetch user settings (including mfa_method)
+    const { data: settings } = await supabase
+        .from('user_settings')
+        .select('display_name, mfa_method')
+        .eq('user_id', user.id)
+        .single();
+
+    const hasMfa = hasTotpMfa || settings?.mfa_method === 'email';
 
     return (
         <div className="flex-1 space-y-8 p-8 pt-6">
             <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight text-white">Settings</h2>
+                <h1 className="text-3xl font-bold tracking-tight text-white">Settings</h1>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4 space-y-4">
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* Left column */}
+                <div className="space-y-6">
+                    <ProfileSection email={user.email || ""} displayName={settings?.display_name || null} />
+
+                    <ThemeToggle />
+
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-6">
                         <div className="flex items-start justify-between">
                             <div className="space-y-1">
@@ -43,15 +60,22 @@ export default async function SettingsPage() {
                         </div>
 
                         <div className="mt-6 border-t border-zinc-800 pt-6">
-                            {/* Client component will be mounted here for MFA management */}
                             <div className="rounded-lg bg-zinc-900/50 p-4">
                                 <p className="text-sm text-zinc-400 mb-4">
                                     Multi-factor authentication (MFA) adds an extra layer of security to your account.
                                 </p>
-                                <MfaManager factors={factors?.all || []} />
+                                <MfaManager factors={factors?.all || []} mfaMethod={settings?.mfa_method || null} />
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Right column */}
+                <div className="space-y-6">
+                    <ConnectedAccountsSection />
+                    <DataExportSection />
+                    <KeyboardShortcutsSection />
+                    <DangerZone />
                 </div>
             </div>
         </div>
