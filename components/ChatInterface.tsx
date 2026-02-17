@@ -3,6 +3,7 @@
 import { Send, Sparkles, Loader2 } from "lucide-react";
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { useSync } from "@/contexts/SyncContext";
+import { authFetch } from "@/lib/api";
 
 export interface ChatInterfaceRef {
     sendMessage: (message: string) => void;
@@ -27,7 +28,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({
 
     // Fetch budget on mount
     useEffect(() => {
-        fetch('/api/settings')
+        authFetch('/api/settings')
             .then(res => res.json())
             .then(data => {
                 if (data.monthly_budget) setBudget(data.monthly_budget);
@@ -60,7 +61,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({
                 balance: "Calculated from recent history"
             };
 
-            const response = await fetch('/api/chat', {
+            const response = await authFetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

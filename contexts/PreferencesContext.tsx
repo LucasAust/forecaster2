@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { authFetch } from "@/lib/api";
 
 /**
  * PreferencesContext manages user preferences that were previously in localStorage.
@@ -88,7 +89,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
             try {
-                await fetch("/api/settings/preferences", {
+                await authFetch("/api/settings/preferences", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ user_preferences: data }),
@@ -104,7 +105,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
         let cancelled = false;
         async function load() {
             try {
-                const res = await fetch("/api/settings/preferences");
+                const res = await authFetch("/api/settings/preferences");
                 if (!res.ok) throw new Error("fetch failed");
                 const serverPrefs: Preferences = await res.json();
 

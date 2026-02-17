@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Lightbulb, Loader2, RefreshCw, ArrowRight } from "lucide-react";
 import { useSync } from "@/contexts/SyncContext";
+import { authFetch } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 
@@ -34,7 +35,7 @@ export function AISuggestions() {
     const fetchSuggestions = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/suggestions'); // GET by default
+            const response = await authFetch('/api/suggestions'); // GET by default
             if (response.ok) {
                 const data = await response.json();
                 if (data.suggestions) {

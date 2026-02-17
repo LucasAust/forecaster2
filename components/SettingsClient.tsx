@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { authFetch } from "@/lib/api";
 import { User, Mail, CreditCard, Download, Keyboard, Trash2, Save, Check, AlertTriangle, Unplug } from "lucide-react";
 
 interface ConnectedAccount {
@@ -25,7 +26,7 @@ export function ProfileSection({ email, displayName: initialName }: { email: str
     const save = async () => {
         setSaving(true);
         try {
-            const res = await fetch("/api/settings", {
+            const res = await authFetch("/api/settings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ display_name: displayName }),
@@ -87,7 +88,7 @@ export function ConnectedAccountsSection() {
 
     const fetchAccounts = useCallback(async () => {
         try {
-            const res = await fetch("/api/plaid/accounts");
+            const res = await authFetch("/api/plaid/accounts");
             if (res.ok) {
                 const data = await res.json();
                 setAccounts(data.items || []);
@@ -107,7 +108,7 @@ export function ConnectedAccountsSection() {
         if (!confirm("Are you sure you want to disconnect this account? You'll need to reconnect via Plaid to restore it.")) return;
         setDisconnecting(itemId);
         try {
-            const res = await fetch("/api/plaid/disconnect", {
+            const res = await authFetch("/api/plaid/disconnect", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ item_id: itemId }),
@@ -187,7 +188,7 @@ export function DataExportSection() {
     const exportAll = async (format: "csv" | "json") => {
         setExporting(format);
         try {
-            const res = await fetch("/api/transactions");
+            const res = await authFetch("/api/transactions");
             if (!res.ok) return;
             const data = await res.json();
             const txs = data.transactions || [];
@@ -296,7 +297,7 @@ export function DangerZone() {
         if (input !== "DELETE") return;
 
         try {
-            const res = await fetch("/api/settings/delete-account", { method: "DELETE" });
+            const res = await authFetch("/api/settings/delete-account", { method: "DELETE" });
             if (res.ok) {
                 window.location.href = "/login";
             }

@@ -13,6 +13,7 @@ import { PageTransition, FadeIn, CountUp } from "@/components/MotionWrappers";
 import { SafeToSpend } from "@/components/SafeToSpend";
 import { DashboardLayoutProvider, DashboardCustomizer, useDashboardLayout } from "@/components/DashboardLayout";
 import { useRouter } from "next/navigation";
+import { authFetch } from "@/lib/api";
 
 // Lazy-load below-fold heavy components
 const SavingsGoals = dynamic(() => import("@/components/SavingsGoals").then(m => ({ default: m.SavingsGoals })), { loading: () => <div className="h-40 glass-card rounded-2xl animate-pulse" /> });
@@ -45,7 +46,7 @@ function DashboardContent() {
   };
 
   useEffect(() => {
-    fetch('/api/settings')
+    authFetch('/api/settings')
       .then(res => res.json())
       .then(data => {
         if (data.email) {
@@ -62,7 +63,7 @@ function DashboardContent() {
   const handleNameUpdate = async () => {
     if (!displayName.trim()) return;
     try {
-      await fetch('/api/settings', {
+      await authFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ display_name: displayName })

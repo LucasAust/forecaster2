@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { CategoryProgressRings } from "@/components/CategoryProgressRings";
 import { Target, TrendingUp, AlertTriangle, Pencil, Check, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { useSync } from "@/contexts/SyncContext";
+import { authFetch } from "@/lib/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition, CountUp } from "@/components/MotionWrappers";
 import { inferCategory } from "@/lib/categories";
@@ -36,7 +37,7 @@ export default function BudgetPage() {
     useEffect(() => {
         async function fetchSettings() {
             try {
-                const response = await fetch('/api/settings');
+                const response = await authFetch('/api/settings');
                 if (response.ok) {
                     const data = await response.json();
                     if (data.monthly_budget !== undefined) {
@@ -131,7 +132,7 @@ export default function BudgetPage() {
         }
 
         try {
-            const response = await fetch('/api/settings', {
+            const response = await authFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ monthly_budget: newTarget })

@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useSync } from "@/contexts/SyncContext";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { authFetch } from "@/lib/api";
 import { inferCategory, CATEGORY_COLORS } from "@/lib/categories";
 import { getDisplayMerchant } from "@/lib/merchants";
 import { FileText, Download, RefreshCw, Sparkles, Calendar, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -152,7 +153,7 @@ export function FinancialReports() {
                 `Previous period spending: $${report.prevTotalExpenses.toFixed(0)}`,
             ].join(". ");
 
-            const res = await fetch("/api/chat", {
+            const res = await authFetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

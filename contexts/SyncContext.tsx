@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { fetchTransactions, fetchForecast } from '@/lib/api';
+import { fetchTransactions, fetchForecast, authFetch } from '@/lib/api';
 import type { Transaction, Forecast, PlaidAccount, LoadingStage, SyncState } from '@/types';
 
 const SyncContext = createContext<SyncState | undefined>(undefined);
@@ -89,7 +89,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 setForecast(fc);
 
                 // Fire-and-forget suggestions update
-                fetch('/api/suggestions', {
+                authFetch('/api/suggestions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ history: data.transactions, forecast: fc })

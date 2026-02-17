@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { authFetch } from "@/lib/api";
 import { ChevronRight, ChevronLeft, X, Target, BarChart3, TrendingUp, MessageSquare, Sparkles, Wallet } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -85,7 +86,7 @@ export function OnboardingWalkthrough({ onComplete }: { onComplete: () => void }
         if (current.budgetStep && budget) {
             setSaving(true);
             try {
-                await fetch("/api/settings", {
+                await authFetch("/api/settings", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ monthly_budget: parseFloat(budget) }),

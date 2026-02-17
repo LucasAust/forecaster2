@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useSync } from "@/contexts/SyncContext";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { authFetch } from "@/lib/api";
 import { inferCategory, CATEGORIES, CATEGORY_COLORS, Category } from "@/lib/categories";
 import { Sparkles, Check, Pencil, RefreshCw, Lightbulb, ArrowRight } from "lucide-react";
 import { clsx } from "clsx";
@@ -119,7 +120,7 @@ export function AIBudgetRecommendations() {
                 `${r.category}: avg $${r.avgMonthly.toFixed(0)}/mo, recommended $${r.recommended}/mo`
             ).join("; ");
 
-            const res = await fetch("/api/chat", {
+            const res = await authFetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

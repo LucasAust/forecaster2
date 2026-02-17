@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { usePlaidLink, PlaidLinkOnSuccess, PlaidLinkOptions } from 'react-plaid-link';
 import { useSync } from "@/contexts/SyncContext";
+import { authFetch } from "@/lib/api";
 
 import { Loader2, Plus } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export function PlaidLink() {
 
         const checkConnection = async () => {
             try {
-                const res = await fetch('/api/transactions');
+                const res = await authFetch('/api/transactions');
                 const data = await res.json();
                 if (!cancelled && data.transactions && data.transactions.length > 0) {
                     setIsConnected(true);
@@ -30,7 +31,7 @@ export function PlaidLink() {
 
         const createLinkToken = async () => {
             try {
-                const response = await fetch('/api/plaid/create_link_token', {
+                const response = await authFetch('/api/plaid/create_link_token', {
                     method: 'POST',
                 });
                 const data = await response.json();
@@ -50,7 +51,7 @@ export function PlaidLink() {
 
     const onSuccess = useCallback<PlaidLinkOnSuccess>(async (public_token, metadata) => {
         try {
-            await fetch('/api/plaid/exchange_public_token', {
+            await authFetch('/api/plaid/exchange_public_token', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

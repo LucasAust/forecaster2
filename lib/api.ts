@@ -1,5 +1,22 @@
 import type { Transaction, Forecast, PlaidAccount, PredictedTransaction, ForecastTimelinePoint } from '@/types';
 
+// ─── Auth-aware fetch wrapper ────────────────────────────────
+// Intercepts 401 (Unauthorized) responses from API routes and
+// redirects the browser to /login so stale sessions never show
+// raw errors to the user.
+
+export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const res = await fetch(input, init);
+    if (res.status === 401) {
+        if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+        }
+        // Throw so callers don't try to parse the 401 body
+        throw new Error('Session expired — redirecting to login');
+    }
+    return res;
+}
+
 interface TransactionsResponse {
     transactions: Transaction[];
     accounts: PlaidAccount[];
@@ -7,13 +24,13 @@ interface TransactionsResponse {
 
 export async function fetchTransactions(force = false): Promise<TransactionsResponse> {
     const url = force ? '/api/transactions?force=true' : '/api/transactions';
-    const res = await fetch(url);
+    const res = await authFetch(url);
     if (!res.ok) throw new Error('Failed to fetch transactions');
     return res.json();
 }
 
 export async function fetchForecast(history: Transaction[] = [], force = false): Promise<Forecast> {
-    const res = await fetch('/api/forecast', {
+    const res = await authFetch('/api/forecast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history, force }),
