@@ -4,9 +4,9 @@ import { Wallet } from 'lucide-react'
 export default async function LoginPage({
     searchParams,
 }: {
-    searchParams: Promise<{ error?: string }>
+    searchParams: Promise<{ error?: string; message?: string }>
 }) {
-    const { error } = await searchParams;
+    const { error, message } = await searchParams;
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-4">
@@ -26,6 +26,12 @@ export default async function LoginPage({
                 {error && (
                     <div className="rounded-xl bg-red-500/10 p-4 text-sm text-red-500 border border-red-500/20 text-center">
                         {decodeURIComponent(error)}
+                    </div>
+                )}
+
+                {message && (
+                    <div className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-400 border border-emerald-500/20 text-center">
+                        {decodeURIComponent(message)}
                     </div>
                 )}
 
