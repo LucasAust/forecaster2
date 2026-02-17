@@ -87,19 +87,19 @@ export async function updateSession(request: NextRequest) {
 
         // Check for verified TOTP factors
         const { data: factors } = await supabase.auth.mfa.listFactors()
-        const hasVerifiedTotpFactor = factors?.all?.some(f => f.status === 'verified')
+        const hasVerifiedTotpFactor = factors?.all?.some(
+            f => f.factor_type === 'totp' && f.status === 'verified'
+        )
 
         if (hasVerifiedTotpFactor) {
-            // Has TOTP factors, but not AAL2 -> Force TOTP verification
-            if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
-                if (!request.nextUrl.pathname.startsWith('/auth/mfa/challenge')) {
-                    if (request.nextUrl.pathname.startsWith('/api')) {
-                        return NextResponse.json({ error: 'MFA verification required' }, { status: 403 })
-                    }
-                    const url = request.nextUrl.clone()
-                    url.pathname = '/auth/mfa/challenge'
-                    return NextResponse.redirect(url)
+            // Has verified TOTP factors but NOT at AAL2 → always force challenge
+            if (!request.nextUrl.pathname.startsWith('/auth/mfa/challenge')) {
+                if (request.nextUrl.pathname.startsWith('/api')) {
+                    return NextResponse.json({ error: 'MFA verification required' }, { status: 403 })
                 }
+                const url = request.nextUrl.clone()
+                url.pathname = '/auth/mfa/challenge'
+                return NextResponse.redirect(url)
             }
             return supabaseResponse
         }

@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { Shield } from 'lucide-react'
 import { MandatoryEnrollment } from './MandatoryEnrollment'
+import { isEmailMfaVerified } from '@/lib/mfa-session'
 
 export default async function EnrollPage() {
     const supabase = await createClient()
@@ -13,7 +14,9 @@ export default async function EnrollPage() {
 
     // Check if already enrolled (TOTP)
     const { data: factors } = await supabase.auth.mfa.listFactors()
-    const hasVerifiedFactor = factors?.all?.some(f => f.status === 'verified')
+    const hasVerifiedFactor = factors?.all?.some(
+        f => f.factor_type === 'totp' && f.status === 'verified'
+    )
 
     if (hasVerifiedFactor) {
         redirect('/')
@@ -27,7 +30,18 @@ export default async function EnrollPage() {
         .single()
 
     if (settings?.mfa_method === 'email') {
-        redirect('/')
+        // Only redirect if the user has a valid verified session.
+        // If the cookie is missing/expired, the enrollment was never completed
+        // or has gone stale — clear it and allow re-enrollment.
+        const verified = await isEmailMfaVerified(user.id)
+        if (verified) {
+            redirect('/')
+        }
+        // Stale/incomplete enrollment — clear it so the user can start fresh
+        await supabase
+            .from('user_settings')
+            .update({ mfa_method: null })
+            .eq('user_id', user.id)
     }
 
     return (
