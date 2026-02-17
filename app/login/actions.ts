@@ -20,12 +20,6 @@ export async function login(formData: FormData) {
         redirect('/login?error=' + encodeURIComponent(error.message))
     }
 
-    const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-
-    if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
-        redirect('/auth/mfa/challenge')
-    }
-
     revalidatePath('/', 'layout')
     redirect('/')
 }

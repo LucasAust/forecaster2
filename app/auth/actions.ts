@@ -253,7 +253,7 @@ export async function getMfaMethod(): Promise<string | null> {
         .from('user_settings')
         .select('mfa_method')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
     return data?.mfa_method || null
 }

@@ -27,7 +27,7 @@ export default async function EnrollPage() {
         .from('user_settings')
         .select('mfa_method')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
     if (settings?.mfa_method === 'email') {
         // Only redirect if the user has a valid verified session.

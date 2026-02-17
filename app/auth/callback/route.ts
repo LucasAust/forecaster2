@@ -4,29 +4,39 @@ import { createClient } from '@/utils/supabase/server'
 /**
  * Auth callback handler.
  * Supabase sends users here after they click the email confirmation link.
- * We exchange the auth code for a session, then redirect into the app
- * (middleware will enforce MFA enrollment if not yet configured).
+ * Handles both PKCE flow (code param) and implicit/token_hash flow.
  */
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
+    const token_hash = searchParams.get('token_hash')
+    const type = searchParams.get('type') as 'signup' | 'email' | 'recovery' | 'invite' | null
     const next = searchParams.get('next') ?? '/'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || origin
 
+    const supabase = await createClient()
+
+    // PKCE flow: exchange authorization code for session
     if (code) {
-        const supabase = await createClient()
         const { error } = await supabase.auth.exchangeCodeForSession(code)
-
         if (!error) {
-            // Use the configured base URL for production,
-            // fall back to the request origin for local dev
-            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || origin
             return NextResponse.redirect(`${baseUrl}${next}`)
         }
     }
 
-    // If code is missing or exchange failed, send them to login with an error
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin
+    // Implicit / token_hash flow: verify the OTP token
+    if (token_hash && type) {
+        const { error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type,
+        })
+        if (!error) {
+            return NextResponse.redirect(`${baseUrl}${next}`)
+        }
+    }
+
+    // If both methods failed or no params provided
     return NextResponse.redirect(
-        `${baseUrl}/login?error=${encodeURIComponent('Email confirmation failed. Please try again.')}`
+        `${baseUrl}/login?error=${encodeURIComponent('Email confirmation failed. Please try signing up again.')}`
     )
 }

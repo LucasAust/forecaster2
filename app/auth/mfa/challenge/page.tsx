@@ -17,7 +17,7 @@ export default async function ChallengePage() {
         .from('user_settings')
         .select('mfa_method')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
     const mfaMethod = settings?.mfa_method
 
