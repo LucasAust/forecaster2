@@ -29,6 +29,7 @@ create table if not exists public.plaid_items (
   item_id text not null,
   last_synced_at timestamp with time zone,
   accounts_data jsonb,
+  sync_cursor text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique(user_id, item_id)
 );
@@ -99,11 +100,18 @@ create table if not exists public.transactions (
   amount numeric not null,
   date date not null,
   name text not null,
+  merchant_name text,
   category text[],
   pending boolean default false,
   logo_url text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Migration: add merchant_name if it doesn't exist yet
+DO $$ BEGIN
+  ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS merchant_name text;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 alter table public.transactions enable row level security;
 

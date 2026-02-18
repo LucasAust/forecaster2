@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { verifyEnrollment } from '@/app/auth/actions'
+import { verifyTOTPChallenge } from '@/app/auth/actions'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle } from 'lucide-react'
 
@@ -17,7 +17,7 @@ export function ChallengeForm({ factorId }: { factorId: string }) {
         setIsLoading(true)
 
         try {
-            await verifyEnrollment(factorId, code)
+            await verifyTOTPChallenge(factorId, code)
             router.push('/')
             router.refresh()
         } catch (err: unknown) {

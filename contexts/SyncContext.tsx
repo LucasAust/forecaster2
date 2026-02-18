@@ -61,7 +61,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {
             console.error("Initial load failed", e);
             setError("Failed to load your financial data. Please refresh.");
-            setLoadingStage('idle');
+            setLoadingStage('complete');
         } finally {
             isSyncingRef.current = false;
             setIsSyncing(false);

@@ -18,7 +18,7 @@ const initialMessages = [
 ];
 
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({ onResponse }, ref) => {
-    const { transactions, forecast } = useSync();
+    const { transactions, forecast, balance } = useSync();
     const [messages, setMessages] = useState(initialMessages);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +58,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({
                 monthly_budget: budget,
                 history: transactions?.slice(0, 50),
                 forecast: forecast?.predicted_transactions?.slice(0, 30),
-                balance: "Calculated from recent history"
+                balance: balance || 0
             };
 
             const response = await authFetch('/api/chat', {

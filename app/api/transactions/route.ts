@@ -14,7 +14,7 @@ export async function GET(request: Request) {
         // Retrieve all access tokens for the user
         const { data: items, error } = await supabase
             .from('plaid_items')
-            .select('access_token, last_synced_at, accounts_data, item_id')
+            .select('access_token, last_synced_at, accounts_data, item_id, sync_cursor')
             .eq('user_id', user.id);
 
         if (error) {
@@ -44,18 +44,53 @@ export async function GET(request: Request) {
                     continue;
                 }
 
-                const response = await plaidClient.transactionsSync({
-                    access_token: accessToken,
-                    count: 500,
-                });
+                const response = await (async () => {
+                    // Paginate through transactionsSync until has_more is false
+                    let cursor = item.sync_cursor || undefined;
+                    let allAdded: typeof firstPage.data.added = [];
+                    let allModified: typeof firstPage.data.modified = [];
+                    let allRemoved: typeof firstPage.data.removed = [];
+                    let hasMore = true;
+
+                    const firstPage = await plaidClient.transactionsSync({
+                        access_token: accessToken,
+                        cursor,
+                        count: 500,
+                    });
+                    allAdded = [...firstPage.data.added];
+                    allModified = [...firstPage.data.modified];
+                    allRemoved = [...firstPage.data.removed];
+                    cursor = firstPage.data.next_cursor;
+                    hasMore = firstPage.data.has_more;
+
+                    while (hasMore) {
+                        const page = await plaidClient.transactionsSync({
+                            access_token: accessToken,
+                            cursor,
+                            count: 500,
+                        });
+                        allAdded = [...allAdded, ...page.data.added];
+                        allModified = [...allModified, ...page.data.modified];
+                        allRemoved = [...allRemoved, ...page.data.removed];
+                        cursor = page.data.next_cursor;
+                        hasMore = page.data.has_more;
+                    }
+
+                    return {
+                        added: allAdded,
+                        modified: allModified,
+                        removed: allRemoved,
+                        next_cursor: cursor,
+                    };
+                })();
 
                 const newTransactions = [
-                    ...response.data.added,
-                    ...response.data.modified
+                    ...response.added,
+                    ...response.modified
                 ];
 
                 // Handle removed transactions
-                const removedIds = response.data.removed.map(r => r.transaction_id);
+                const removedIds = response.removed.map(r => r.transaction_id);
                 if (removedIds.length > 0) {
                     await supabase
                         .from('transactions')
@@ -77,6 +112,7 @@ export async function GET(request: Request) {
                         amount: t.amount,
                         date: t.date,
                         name: t.name,
+                        merchant_name: t.merchant_name || null,
                         category: t.category,
                         pending: t.pending,
                         logo_url: t.logo_url || null
@@ -91,12 +127,13 @@ export async function GET(request: Request) {
                     }
                 }
 
-                // Update last_synced_at and accounts_data
+                // Update last_synced_at, accounts_data, and sync cursor
                 await supabase
                     .from('plaid_items')
                     .update({
                         last_synced_at: new Date().toISOString(),
-                        accounts_data: newAccounts
+                        accounts_data: newAccounts,
+                        sync_cursor: response.next_cursor || null,
                     })
                     .eq('item_id', item.item_id);
 
@@ -119,15 +156,37 @@ export async function GET(request: Request) {
 
         allAccounts = finalItems?.flatMap(i => i.accounts_data || []) || [];
 
+        // Deduplicate accounts: same account can appear from multiple plaid items
+        // (e.g., user reconnected the same bank). Dedup by account_id.
+        const acctSeen = new Set<string>();
+        allAccounts = allAccounts.filter((acct: Record<string, unknown>) => {
+            const id = acct.account_id as string;
+            if (!id || acctSeen.has(id)) return false;
+            acctSeen.add(id);
+            return true;
+        });
+
         const { data: finalTransactions, error: txError } = await supabase
             .from('transactions')
             .select('*')
             .eq('user_id', user.id)
-            .order('date', { ascending: false });
+            .order('date', { ascending: false })
+            .limit(2000);
 
         if (txError) console.error("Error fetching final transactions:", txError);
 
         allTransactions = finalTransactions || [];
+
+        // Deduplicate: when users connect checking + savings at the same bank,
+        // or reconnect the same account, Plaid returns the same transaction from
+        // each linked item. Dedupe by (date, name, amount) keeping the first.
+        const txSeen = new Set<string>();
+        allTransactions = allTransactions.filter((tx: Record<string, unknown>) => {
+            const key = `${tx.date}|${tx.name}|${Math.round((tx.amount as number) * 100)}`;
+            if (txSeen.has(key)) return false;
+            txSeen.add(key);
+            return true;
+        });
 
         return NextResponse.json({ transactions: allTransactions, accounts: allAccounts });
     } catch (error) {

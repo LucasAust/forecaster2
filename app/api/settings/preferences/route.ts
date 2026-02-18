@@ -45,7 +45,7 @@ export async function POST(request: Request) {
             .upsert({
                 user_id: user.id,
                 user_preferences,
-            });
+            }, { onConflict: 'user_id' });
 
         if (error) throw error;
 

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
         const { error } = await supabase
             .from('user_settings')
-            .upsert(updateData);
+            .upsert(updateData, { onConflict: 'user_id' });
 
         if (error) throw error;
 

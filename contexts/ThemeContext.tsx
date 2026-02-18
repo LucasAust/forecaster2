@@ -31,10 +31,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize from localStorage
     useEffect(() => {
-        const stored = localStorage.getItem("arc-theme") as Theme | null;
-        if (stored && ["light", "dark", "system"].includes(stored)) {
-            setThemeState(stored);
-        }
+        try {
+            const stored = localStorage.getItem("arc-theme") as Theme | null;
+            if (stored && ["light", "dark", "system"].includes(stored)) {
+                setThemeState(stored);
+            }
+        } catch { /* restricted storage */ }
     }, []);
 
     // Resolve theme and apply to <html>
@@ -65,7 +67,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const setTheme = useCallback((newTheme: Theme) => {
         setThemeState(newTheme);
-        localStorage.setItem("arc-theme", newTheme);
+        try { localStorage.setItem("arc-theme", newTheme); } catch { /* restricted storage */ }
     }, []);
 
     return (

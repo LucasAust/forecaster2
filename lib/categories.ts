@@ -59,29 +59,31 @@ const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
     { keywords: ["rent", "mortgage", "hoa", "property tax", "landlord", "apartment", "real estate", "bilt"], category: "Housing" },
     // Auto / Transport (note: "uber" and "subway" removed — they match Food & Drink brands first)
     { keywords: ["mazda", "ford motor", "auto loan", "car payment", "car loan", "auto pay"], category: "Auto" },
+    // Student Loans (must come before generic "student" matches in Shopping/Education)
+    { keywords: ["dept education", "student ln", "student loan"], category: "Education" },
     // Dev Tools / SaaS (must come before Subscriptions to win)
     { keywords: ["digitalocean", "digital ocean", "supabase", "github", "google cloud", "gcp", "codetwo", "code two", "render.com", "vercel", "railway", "aws ", "amazon web", "heroku", "netlify", "anthropic", "openai", "li drum bus", "creem", "bolt stackblitz", "stackblitz"], category: "Subscriptions" },
     // Food & Drink — placed ABOVE Transport so "uber eat" and "subway" match here first
     { keywords: ["starbucks", "mcdonald", "burger", "coffee", "restaurant", "food", "cafe", "pizza", "taco", "chipotle", "subway", "doordash", "grubhub", "uber eat", "postmates", "panera", "chick-fil", "dunkin", "wendy", "domino", "panda express", "five guys", "in-n-out", "jack in the box", "popeyes", "dine", "dining", "bar ", "pub ", "brew", "bakery", "waffle house", "cookout", "cava", "wingstop", "tropical smoothie"], category: "Food & Drink" },
     { keywords: ["lyft", "chevron", "shell", "gas", "exxon", "bp ", "mobil", "texaco", "citgo", "fuel", "sunoco", "parking", "toll", "transit", "metro", "bus fare", "uber trip", "speedway", "wawa"], category: "Transport" },
     // Groceries
-    { keywords: ["safeway", "whole foods", "trader joe", "market", "costco", "grocery", "kroger", "publix", "aldi", "wegmans", "heb", "food lion", "piggly", "sprouts", "ralph", "harris teeter", "winco", "albertson", "meijer", "stop & shop", "giant"], category: "Groceries" },
+    { keywords: ["safeway", "whole foods", "trader joe", "market", "costco", "grocery", "kroger", "publix", "aldi", "wegmans", "heb", "food lion", "piggly", "sprouts", "ralph", "harris teeter", "winco", "albertson", "meijer", "stop & shop", "giant", "food city"], category: "Groceries" },
     // Subscriptions
     { keywords: ["netflix", "spotify", "hulu", "disney+", "disney plus", "apple music", "youtube", "amazon prime", "hbo", "max.com", "help.max", "paramount", "peacock", "crunchyroll", "audible", "claude", "chatgpt", "adobe", "dropbox", "icloud", "google storage", "microsoft 365", "office 365", "canva", "notion", "gym member", "membership", "playstation", "psn", "xbox", "nintendo"], category: "Subscriptions" },
     // Entertainment
     { keywords: ["cinema", "movie", "theater", "theatre", "concert", "ticket", "game", "steam", "twitch", "sport", "bowling", "arcade", "golf", "amusement", "museum", "zoo"], category: "Entertainment" },
     // Utilities
-    { keywords: ["dominion energy", "dominion va", "pge", "pg&e", "water", "electric", "internet", "at&t", "att ", "verizon", "t-mobile", "tmobile", "comcast", "xfinity", "spectrum", "utility", "utilities", "gas bill", "sewer", "trash", "waste management", "power", "duke energy"], category: "Utilities" },
+    { keywords: ["dominion energy", "dominion va", "pge", "pg&e", "water", "electric", "internet", "at&t", "att ", "verizon", "t-mobile", "tmobile", "comcast", "xfinity", "spectrum", "utility", "utilities", "gas bill", "sewer", "trash", "waste management", "power", "duke energy", "johnsoncityenerg", "johnson city energy", "elect_pymt"], category: "Utilities" },
     // Insurance
     { keywords: ["insurance", "geico", "state farm", "allstate", "progressive", "usaa", "liberty mutual", "farmers", "nationwide", "premium"], category: "Insurance" },
     // Healthcare
-    { keywords: ["pharmacy", "cvs", "walgreens", "doctor", "hospital", "medical", "dental", "vision", "health", "clinic", "urgent care", "prescription", "lab", "therapy", "mental health"], category: "Healthcare" },
+    { keywords: ["pharmacy", "cvs", "walgreens", "doctor", "hospital", "medical", "dental", "vision", "health", "clinic", "urgent care", "prescription", "lab", "therapy", "mental health", "america's best", "americas best", "lenscrafters", "optical"], category: "Healthcare" },
     // Travel
-    { keywords: ["united", "delta", "american air", "southwest", "jetblue", "airbnb", "hotel", "flight", "airline", "marriott", "hilton", "hyatt", "booking.com", "expedia", "trivago", "cruise", "resort"], category: "Travel" },
+    { keywords: ["united", "delta", "american air", "southwest", "jetblue", "allegiant", "allegnt", "airbnb", "hotel", "flight", "airline", "marriott", "hilton", "hyatt", "booking.com", "expedia", "trivago", "cruise", "resort"], category: "Travel" },
     // Shopping
-    { keywords: ["amazon", "target", "walmart", "ebay", "etsy", "best buy", "apple store", "ikea", "home depot", "lowe", "nordstrom", "macy", "tj maxx", "marshall", "ross", "zappos", "nike", "adidas", "gap", "old navy", "zara", "h&m", "shein", "sparkfun", "online purchase"], category: "Shopping" },
-    // Education
-    { keywords: ["tuition", "university", "college", "school", "student", "textbook", "udemy", "coursera", "skillshare", "masterclass", "education"], category: "Education" },
+    { keywords: ["amazon", "target", "walmart", "ebay", "etsy", "best buy", "apple store", "ikea", "home depot", "lowe", "nordstrom", "macy", "tj maxx", "marshall", "ross", "zappos", "nike", "adidas", "gap", "old navy", "zara", "h&m", "shein", "sparkfun", "online purchase", "usps"], category: "Shopping" },
+    // Education / Student Loans
+    { keywords: ["dept education", "student ln", "student loan", "tuition", "university", "college", "school", "textbook", "udemy", "coursera", "skillshare", "masterclass", "education"], category: "Education" },
     // Personal Care
     { keywords: ["salon", "barber", "haircut", "spa", "nail", "beauty", "skincare", "sephora", "ulta", "cosmetic", "grooming"], category: "Personal Care" },
     // Gifts & Donations

@@ -15,6 +15,8 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /bank\s*of\s*america|bofa/i, name: "Bank of America" },
     { pattern: /capital\s*one/i, name: "Capital One" },
     { pattern: /paypal/i, name: "PayPal" },
+    { pattern: /discover\s*e-?|discover\s*payment/i, name: "Discover" },
+    { pattern: /clerky/i, name: "Clerky" },
 
     // Telecom
     { pattern: /att\*?\s*bill|at&t|att\s+/i, name: "AT&T" },
@@ -59,6 +61,25 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /dominion\s*energy|dominion\s*va/i, name: "Dominion Energy" },
     { pattern: /pg&?e|pacific\s*gas/i, name: "PG&E" },
     { pattern: /duke\s*energy/i, name: "Duke Energy" },
+    { pattern: /johnsoncityenerg/i, name: "Johnson City Energy" },
+
+    // Services
+    { pattern: /petscreening/i, name: "Petscreening" },
+    { pattern: /arc\s*predict/i, name: "Arc Predict" },
+    { pattern: /dept\s*education|student\s*l[no]/i, name: "Dept of Education" },
+
+    // Travel / Airlines
+    { pattern: /allegn?a?n?t\s*air/i, name: "Allegiant Air" },
+    { pattern: /southwest/i, name: "Southwest Airlines" },
+    { pattern: /united\s*air/i, name: "United Airlines" },
+    { pattern: /delta\s*air/i, name: "Delta Airlines" },
+    { pattern: /american\s*air/i, name: "American Airlines" },
+    { pattern: /jetblue/i, name: "JetBlue" },
+
+    // Shipping / Postal
+    { pattern: /usps|postal\s*service/i, name: "USPS" },
+    { pattern: /fedex/i, name: "FedEx" },
+    { pattern: /ups\b/i, name: "UPS" },
 
     // Food & Drink
     { pattern: /starbucks/i, name: "Starbucks" },
@@ -78,6 +99,9 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /wingstop/i, name: "Wingstop" },
     { pattern: /panda\s*express/i, name: "Panda Express" },
     { pattern: /tropical\s*smoothie/i, name: "Tropical Smoothie" },
+    { pattern: /yee\s*haw/i, name: "Yee Haw Brewing" },
+    { pattern: /tootsies/i, name: "Tootsies Orchid" },
+    { pattern: /food\s*city/i, name: "Food City" },
 
     // Transport
     { pattern: /uber(?!\s*eat)/i, name: "Uber" },
@@ -114,9 +138,10 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /state\s*farm/i, name: "State Farm" },
     { pattern: /progressive/i, name: "Progressive" },
 
-    // Health / Pharmacy
+    // Health / Pharmacy / Optical
     { pattern: /cvs/i, name: "CVS Pharmacy" },
     { pattern: /walgreens/i, name: "Walgreens" },
+    { pattern: /america'?s\s*best/i, name: "America's Best" },
 
     // Transfers / P2P
     { pattern: /zelle/i, name: "Zelle" },
@@ -145,15 +170,26 @@ const NOISE_PATTERNS = [
 export function cleanMerchantName(rawName: string): string {
     if (!rawName) return "Unknown";
 
-    // 1. Check known merchant mappings first
+    // 0. Extract the actual merchant from debit-card purchase patterns.
+    //    Many banks embed the real merchant after a delimiter like &@# or @#
+    //    e.g. "DEBIT PURCHASE 0128 4883&@#AMERICA'S BEST" → "AMERICA'S BEST"
+    let nameToClean = rawName;
+    const debitDelimiterMatch = rawName.match(/[&@#]{2,}\s*(.+)$/i);
+    if (debitDelimiterMatch && debitDelimiterMatch[1].trim().length > 2) {
+        nameToClean = debitDelimiterMatch[1].trim();
+        // Remove trailing suffixes like ", LL" (truncated LLC) or ", IN" (truncated INC)
+        nameToClean = nameToClean.replace(/,\s*[A-Z]{1,3}$/i, "").trim();
+    }
+
+    // 1. Check known merchant mappings first (try extracted name, then raw)
     for (const { pattern, name } of MERCHANT_MAP) {
-        if (pattern.test(rawName)) {
+        if (pattern.test(nameToClean) || pattern.test(rawName)) {
             return name;
         }
     }
 
-    // 2. Clean up the raw name
-    let cleaned = rawName;
+    // 2. Clean up the name (use extracted merchant if available)
+    let cleaned = nameToClean;
 
     // Remove noise patterns
     for (const pattern of NOISE_PATTERNS) {

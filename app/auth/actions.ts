@@ -62,6 +62,23 @@ export async function verifyEnrollment(factorId: string, code: string) {
     return data
 }
 
+/**
+ * Verify a TOTP challenge during login (does NOT modify mfa_method setting).
+ */
+export async function verifyTOTPChallenge(factorId: string, code: string) {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId,
+        code,
+    })
+
+    if (error) {
+        throw new Error(error.message)
+    }
+
+    return data
+}
+
 export async function unenrollMFA(factorId: string) {
     const supabase = await createClient()
     const { error } = await supabase.auth.mfa.unenroll({
@@ -156,11 +173,15 @@ export async function sendEmailMFAChallenge() {
     const code = generateOTPCode()
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
-    await supabase.from('mfa_email_codes').insert({
+    const { error: insertError } = await supabase.from('mfa_email_codes').insert({
         user_id: user.id,
         code,
         expires_at: expiresAt,
     })
+
+    if (insertError) {
+        throw new Error('Failed to generate verification code. Please try again.')
+    }
 
     await sendMFACode(user.email, code)
 

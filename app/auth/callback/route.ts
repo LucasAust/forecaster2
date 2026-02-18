@@ -11,8 +11,11 @@ export async function GET(request: Request) {
     const code = searchParams.get('code')
     const token_hash = searchParams.get('token_hash')
     const type = searchParams.get('type') as 'signup' | 'email' | 'recovery' | 'invite' | null
-    const next = searchParams.get('next') ?? '/'
+    const rawNext = searchParams.get('next') ?? '/'
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || origin
+
+    // Prevent open redirect — only allow relative paths
+    const next = (rawNext.startsWith('/') && !rawNext.startsWith('//')) ? rawNext : '/'
 
     const supabase = await createClient()
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export async function DELETE() {
     const supabase = await createClient();
@@ -17,6 +18,20 @@ export async function DELETE() {
         await supabase.from("plaid_items").delete().eq("user_id", user.id);
         await supabase.from("forecasts").delete().eq("user_id", user.id);
         await supabase.from("user_settings").delete().eq("user_id", user.id);
+
+        // Delete the auth user via admin API (requires SUPABASE_SERVICE_ROLE_KEY)
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (serviceRoleKey) {
+            const adminClient = createAdminClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                serviceRoleKey,
+                { auth: { autoRefreshToken: false, persistSession: false } }
+            );
+            const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
+            if (deleteError) {
+                console.error("Error deleting auth user:", deleteError);
+            }
+        }
 
         // Sign user out
         await supabase.auth.signOut();

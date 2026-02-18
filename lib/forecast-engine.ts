@@ -77,10 +77,52 @@ const NOISE_MERCHANT_PATTERNS = [
     /interest\s*payment/i,
     /redemption\s*credit/i,
     /statement\s*credit\s*adjust/i,
+    /interest\s*paid/i,
+    /cashback.*bonus|cash.*back.*redemption/i,
+    /directpay.*full.*balance/i,
+    /internet\s*payment.*thank/i,
 ];
 
 /** Categories that should never appear in forecasts */
 const EXCLUDED_CATEGORIES = new Set(["Transfer", "Income"]);
+
+/**
+ * Categories where spending is inherently sporadic / event-driven.
+ * These require MORE historical evidence to be treated as recurring,
+ * and should never be projected just because someone did it twice.
+ */
+const SPORADIC_CATEGORIES = new Set([
+    "Travel",         // Flights, hotels — seasonal, around holidays/events
+    "Entertainment",  // Concerts, movies — event-driven
+    "Shopping",       // One-off purchases, not bills
+    "Personal Care",  // Haircuts every few months, not clock-like
+    "Gifts & Donations", // Seasonal (holidays, birthdays)
+]);
+
+/**
+ * Merchant patterns that should NEVER be treated as recurring.
+ * These are inherently one-off or event-driven purchases, even if
+ * someone has done them multiple times in history.
+ */
+const NEVER_RECURRING_PATTERNS = [
+    // Airlines — flights are seasonal, around holidays / events
+    /allegiant|allegnt/i, /southwest/i, /united\s*air/i, /delta\s*air/i,
+    /american\s*air/i, /jetblue/i, /frontier/i, /spirit\s*air/i,
+    /ryanair/i, /british\s*air/i, /lufthansa/i, /air\s*canada/i,
+    // Hotels / Lodging
+    /marriott/i, /hilton/i, /hyatt/i, /airbnb/i, /vrbo/i,
+    /holiday\s*inn/i, /best\s*western/i, /hampton/i,
+    // Travel services
+    /expedia/i, /booking\.com/i, /trivago/i, /kayak/i,
+    // Shipping (one-off)
+    /usps/i, /fedex/i, /ups\b/i,
+    // Legal / professional services (one-off)
+    /clerky/i,
+];
+
+function isNeverRecurring(merchant: string): boolean {
+    return NEVER_RECURRING_PATTERNS.some((p) => p.test(merchant));
+}
 
 /** Merchants that are SaaS/subscriptions (post on exact date, not ACH weekend-shifted) */
 const SUBSCRIPTION_PATTERNS = [
@@ -224,7 +266,7 @@ function seededRandom(seed: number): () => number {
 // ─── Step 1: Clean Raw Transactions ─────────────────────────
 
 function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
-    return raw
+    const cleaned = raw
         .filter((tx) => !tx.pending)
         .filter((tx) => {
             // Check noise on RAW name BEFORE merchant cleaning
@@ -243,14 +285,30 @@ function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
         })
         .filter((tx) => !isNoiseMerchant(tx.merchant)) // also check cleaned name
         .sort((a, b) => a.date.localeCompare(b.date));
+
+    // ── Deduplicate: same date + merchant + amount = cross-account duplicate ──
+    // When users connect multiple accounts at the same bank (or reconnect),
+    // Plaid returns the same transaction from each linked account.
+    // These are NOT split payments — they're exact duplicates.
+    const seen = new Map<string, CleanTransaction>();
+    for (const tx of cleaned) {
+        const key = `${tx.date}|${tx.merchant}|${Math.round(tx.amount * 100)}`;
+        if (!seen.has(key)) {
+            seen.set(key, tx);
+        }
+    }
+    return [...seen.values()];
 }
 
 // ─── Step 1b: Merge Split Payments ──────────────────────────
 
 /**
- * If the same merchant has multiple transactions within a 10-day window,
- * merge them into one logical transaction (sum of amounts, earliest date).
- * Handles split rent payments, partial refunds, etc.
+ * If the same merchant has multiple transactions within a 10-day window
+ * AND they have DIFFERENT amounts, merge them into one logical transaction
+ * (sum of amounts, earliest date). Handles split rent payments, partial refunds, etc.
+ *
+ * Important: Does NOT merge transactions with identical amounts on the same day
+ * or within 2 days — those are typically recurring charges, not split payments.
  */
 function mergeSplitPayments(txs: CleanTransaction[]): CleanTransaction[] {
     const byMerchant = new Map<string, CleanTransaction[]>();
@@ -275,9 +333,15 @@ function mergeSplitPayments(txs: CleanTransaction[]): CleanTransaction[] {
                 (cluster[0].amount < 0 && sorted[i].amount < 0) ||
                 (cluster[0].amount > 0 && sorted[i].amount > 0);
 
+            // Don't merge if amounts are identical — that's likely separate recurring charges,
+            // not a split payment (e.g., two $12.95 Spotify charges = error, not a $25.90 split)
+            const hasIdenticalAmount = cluster.some(
+                (c) => Math.round(c.amount * 100) === Math.round(sorted[i].amount * 100)
+            );
+
             // Merge if: within 10 days of last item AND total cluster span ≤ 15 days
-            // The span cap prevents chaining (A→B→C where A-C > 15 days)
-            if (gapFromLast <= 10 && spanFromFirst <= 15 && sameSign) {
+            // AND amounts differ (to avoid summing duplicate charges)
+            if (gapFromLast <= 10 && spanFromFirst <= 15 && sameSign && !hasIdenticalAmount) {
                 cluster.push(sorted[i]);
             } else {
                 // Flush cluster
@@ -327,13 +391,29 @@ function detectRecurringSeries(txs: CleanTransaction[]): RecurringSeries[] {
     for (const [merchant, all] of byMerchant.entries()) {
         if (all.length < 2) continue;
 
+        // ── Real-world guardrail: skip merchants that are never truly recurring ──
+        // Airlines, hotels, shipping, legal services, etc. are event-driven.
+        if (isNeverRecurring(merchant)) continue;
+
+        // ── Minimum occurrence thresholds based on category ──
+        // Subscriptions/bills: 2+ occurrences is enough (Netflix, rent, etc.)
+        // Sporadic categories: need 4+ to distinguish pattern from coincidence
+        // Everything else: need 3+ (reasonable default)
+        const primaryCategory = all[0]?.category || "Other";
+        const isSub = isSubscription(merchant);
+        const minOccurrences = isSub ? 2
+            : SPORADIC_CATEGORIES.has(primaryCategory) ? 4
+            : 3;
+
+        if (all.length < minOccurrences) continue;
+
         // Separate expenses and income
         const expenses = all.filter((t) => t.amount < 0);
         const income = all.filter((t) => t.amount > 0);
 
         const groups: { txs: CleanTransaction[]; type: "expense" | "income" }[] = [];
-        if (expenses.length >= 2) groups.push({ txs: expenses, type: "expense" });
-        if (income.length >= 2) groups.push({ txs: income, type: "income" });
+        if (expenses.length >= minOccurrences) groups.push({ txs: expenses, type: "expense" });
+        if (income.length >= minOccurrences) groups.push({ txs: income, type: "income" });
 
         for (const { txs: groupTxs, type } of groups) {
             const sorted = [...groupTxs].sort((a, b) => a.date.localeCompare(b.date));
@@ -447,11 +527,12 @@ function detectDiscretionaryPatterns(
     txs: CleanTransaction[],
     recurringMerchants: Set<string>
 ): DiscretionaryPattern[] {
-    // Exclude recurring merchants, transfers, income, and noise
+    // Exclude recurring merchants, transfers, income, noise, and never-recurring merchants
     const disc = txs.filter(
         (tx) =>
             !recurringMerchants.has(tx.merchant) &&
             !EXCLUDED_CATEGORIES.has(tx.category) &&
+            !isNeverRecurring(tx.merchant) &&
             tx.amount < 0
     );
 
@@ -463,17 +544,30 @@ function detectDiscretionaryPatterns(
 
     const patterns: DiscretionaryPattern[] = [];
 
-    // Use only recent 6 months for frequency calculations
-    // (spending habits change; ancient data drags averages)
-    const sixMonthsAgo = formatDate(addDays(new Date(), -180));
+    // ── Seasonal awareness ──
+    // Use last 6 months EXCLUDING major holiday months (Nov-Dec) for frequency.
+    // Holiday spending distorts projections into spring/summer.
+    const today = new Date();
+    const sixMonthsAgo = formatDate(addDays(today, -180));
+
+    // Non-holiday recent transactions (exclude Nov & Dec for frequency calc)
     const recentTxs = txs.filter((tx) => tx.date >= sixMonthsAgo);
-    const recentHistoryDays = recentTxs.length > 1
-        ? daysBetween(recentTxs[0].date, recentTxs[recentTxs.length - 1].date)
+    const nonHolidayRecent = recentTxs.filter((tx) => {
+        const month = parseInt(tx.date.substring(5, 7), 10);
+        return month !== 11 && month !== 12; // Exclude Nov & Dec
+    });
+    // Use non-holiday data if we have enough, otherwise fall back to all recent
+    const frequencyTxs = nonHolidayRecent.length >= 10 ? nonHolidayRecent : recentTxs;
+    const recentHistoryDays = frequencyTxs.length > 1
+        ? daysBetween(frequencyTxs[0].date, frequencyTxs[frequencyTxs.length - 1].date)
         : 1;
     const recentWeeks = Math.max(1, recentHistoryDays / 7);
 
     for (const [category, catTxs] of byCategory.entries()) {
         if (catTxs.length < 3) continue;
+
+        // Travel is event-driven (flights, hotels) — never project as discretionary pattern
+        if (category === "Travel") continue;
 
         // Count recent transactions for frequency (last 6 months)
         const recentCatTxs = catTxs.filter((tx) => tx.date >= sixMonthsAgo);

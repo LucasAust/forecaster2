@@ -1,0 +1,225 @@
+Date,Merchant,Category,Amount,Balance,Type
+2026-05-19,"Mazda Financial","Auto",-795.44,-18413.26,predicted
+2026-05-15,"Johnsoncityenerg Elect_pymt","Other",-187.57,-17617.82,predicted
+2026-05-14,"Petscreening Service","Other",-118.64,-17430.25,predicted
+2026-05-13,"Chase","Other",-107.62,-17311.61,predicted
+2026-05-12,"Anthropic","Subscriptions",-43.80,-17203.99,predicted
+2026-05-11,"Amazon","Shopping",-57.07,-17124.70,predicted
+2026-05-11,"Chase","Food & Drink",-35.49,-17160.19,predicted
+2026-05-10,"Spotify","Subscriptions",-25.90,-17067.63,predicted
+2026-05-08,"Netflix","Subscriptions",-17.26,-17041.73,predicted
+2026-05-06,"Discover E-","Other",-159.27,-16891.48,predicted
+2026-05-06,"Arc Predict","Other",-132.99,-17024.47,predicted
+2026-05-04,"Petscreening Service","Other",-123.21,-16732.21,predicted
+2026-05-01,"Apple Card","Other",-1944.93,-15110.68,predicted
+2026-05-01,"SoFi","Other",-1397.72,-16508.40,predicted
+2026-05-01,"Card Cashback Bonus Auto Redemption","Other",14.78,-16493.62,predicted
+2026-05-01,"Chase","Other",-115.38,-16609.00,predicted
+2026-04-30,"Interest Paid","Other",38.44,-13165.75,predicted
+2026-04-27,"CVS Pharmacy","Healthcare",-70.00,-13204.19,predicted
+2026-04-22,"Arc Predict","Other",-143.71,-13134.19,predicted
+2026-04-20,"Mazda Financial","Auto",-795.44,-12782.74,predicted
+2026-04-20,"Petscreening Service","Other",-143.21,-12925.95,predicted
+2026-04-20,"Amazon","Shopping",-64.53,-12990.48,predicted
+2026-04-18,"Chase","Other",-120.31,-11687.30,predicted
+2026-04-18,"Walgreens","Healthcare",-300.00,-11987.30,predicted
+2026-04-16,"Johnsoncityenerg Elect_pymt","Other",-187.57,-11453.16,predicted
+2026-04-16,"Arc Predict","Other",-113.83,-11566.99,predicted
+2026-04-12,"Anthropic","Subscriptions",-43.80,-11265.59,predicted
+2026-04-11,"Petscreening Service","Other",-115.82,-11163.49,predicted
+2026-04-11,"Amazon","Shopping",-58.30,-11221.79,predicted
+2026-04-10,"Spotify","Subscriptions",-25.90,-10922.58,predicted
+2026-04-10,"Chase","Other",-125.09,-11047.67,predicted
+2026-04-08,"Netflix","Subscriptions",-17.26,-10896.68,predicted
+2026-04-06,"Discover E-","Other",-159.27,-10879.42,predicted
+2026-04-04,"Arc Predict","Other",-123.88,-10420.15,predicted
+2026-04-04,"Walgreens","Healthcare",-300.00,-10720.15,predicted
+2026-04-03,"Petscreening Service","Other",-130.68,-10296.27,predicted
+2026-04-02,"Apple Card","Other",-1944.93,-10165.59,predicted
+2026-04-01,"SoFi","Other",-1397.72,-8235.44,predicted
+2026-04-01,"Card Cashback Bonus Auto Redemption","Other",14.78,-8220.66,predicted
+2026-03-31,"Interest Paid","Other",38.44,-6837.72,predicted
+2026-03-30,"Chase","Food & Drink",-36.23,-6876.16,predicted
+2026-03-28,"Chase","Other",-129.36,-6839.93,predicted
+2026-03-27,"CVS Pharmacy","Healthcare",-70.00,-6590.20,predicted
+2026-03-27,"Arc Predict","Other",-120.37,-6710.57,predicted
+2026-03-23,"Petscreening Service","Other",-139.36,-6484.62,predicted
+2026-03-23,"Chase","Food & Drink",-35.58,-6520.20,predicted
+2026-03-22,"Amazon","Shopping",-63.25,-6345.26,predicted
+2026-03-20,"Chase","Other",-120.66,-6282.01,predicted
+2026-03-19,"Mazda Financial","Auto",-795.44,-5802.75,predicted
+2026-03-19,"Walgreens","Healthcare",-300.00,-6102.75,predicted
+2026-03-19,"Amazon","Shopping",-58.60,-6161.35,predicted
+2026-03-18,"Arc Predict","Other",-119.26,-5007.31,predicted
+2026-03-16,"Johnsoncityenerg Elect_pymt","Other",-187.57,-4588.05,predicted
+2026-03-16,"Walgreens","Healthcare",-300.00,-4888.05,predicted
+2026-03-13,"Petscreening Service","Other",-137.51,-4400.48,predicted
+2026-03-12,"Anthropic","Subscriptions",-43.80,-4262.97,predicted
+2026-03-10,"Spotify","Subscriptions",-25.90,-4219.17,predicted
+2026-03-09,"Chase","Food & Drink",-32.49,-4193.27,predicted
+2026-03-08,"Netflix","Subscriptions",-17.26,-4160.78,predicted
+2026-03-07,"Chase","Other",-127.54,-4143.52,predicted
+2026-03-06,"Discover E-","Other",-159.27,-4015.98,predicted
+2026-03-02,"Apple Card","Other",-1944.93,-2348.75,predicted
+2026-03-02,"SoFi","Other",-1397.72,-3746.47,predicted
+2026-03-02,"Card Cashback Bonus Auto Redemption","Other",14.78,-3731.69,predicted
+2026-03-02,"Arc Predict","Other",-125.02,-3856.71,predicted
+2026-02-27,"CVS Pharmacy","Healthcare",-70.00,-442.26,predicted
+2026-02-27,"Interest Paid","Other",38.44,-403.82,predicted
+2026-02-23,"Petscreening Service","Other",-117.77,-372.26,predicted
+2026-02-20,"Chase","Other",-129.35,-254.49,predicted
+2026-02-19,"Amazon","Shopping",-64.08,-125.14,predicted
+2026-02-13,"Anthropic","Subscriptions",-21.90,-61.06,actual
+2026-02-13,"Withdrawal Discover E-","Other",-30.53,-39.16,actual
+2026-02-13,"Directpay Full Balance","Other",30.53,-8.63,actual
+2026-02-13,"Anthropic","Subscriptions",-21.90,-39.16,actual
+2026-02-13,"Withdrawal Discover E-","Other",-30.53,-17.26,actual
+2026-02-13,"Directpay Full Balance","Other",30.53,13.27,actual
+2026-02-12,"Transfer To Online Savings","Transfer",-250.00,-17.26,actual
+2026-02-12,"Transfer To Online Savings","Transfer",-250.00,232.74,actual
+2026-02-12,"Transfer From Checking","Transfer",250.00,482.74,actual
+2026-02-12,"Transfer From Checking","Transfer",250.00,232.74,actual
+2026-02-11,"Withdrawal Dept Education Student Ln","Education",-2160.60,-17.26,actual
+2026-02-11,"Early Pay Payroll Ach From Eastman Chemical","Income",2209.64,2143.34,actual
+2026-02-11,"Withdrawal Dept Education Student Ln","Education",-2160.60,-66.30,actual
+2026-02-11,"Early Pay Payroll Ach From Eastman Chemical","Income",2209.64,2094.30,actual
+2026-02-10,"Spotify","Subscriptions",-12.95,-115.34,actual
+2026-02-10,"Spotify","Subscriptions",-12.95,-102.39,actual
+2026-02-09,"Netflix","Subscriptions",-8.63,-89.44,actual
+2026-02-09,"Netflix","Subscriptions",-8.63,-80.81,actual
+2026-02-02,"Apple Card","Other",-944.95,-72.18,actual
+2026-02-02,"Apple Card","Other",-944.95,872.77,actual
+2026-02-01,"Card Cashback Bonus Auto Redemption","Other",10.13,1817.72,actual
+2026-02-01,"Card Cashback Bonus Auto Redemption","Other",10.13,1807.59,actual
+2026-01-31,"Interest Paid","Other",20.32,1797.46,actual
+2026-01-31,"Interest Paid","Other",20.32,1777.14,actual
+2026-01-30,"Chase","Other",-122.93,1756.82,actual
+2026-01-30,"Chase","Other",-122.93,1879.75,actual
+2026-01-29,"Transfer From Checking","Transfer",250.00,2002.68,actual
+2026-01-29,"Transfer To Online Savings","Transfer",-250.00,1752.68,actual
+2026-01-29,"Transfer To Online Savings","Transfer",-250.00,2002.68,actual
+2026-01-29,"Transfer From Checking","Transfer",250.00,2252.68,actual
+2026-01-28,"Early Pay Payroll Ach From Eastman Chemical","Income",2209.63,2002.68,actual
+2026-01-28,"SoFi","Other",-698.86,-206.95,actual
+2026-01-28,"Early Pay Payroll Ach From Eastman Chemical","Income",2209.63,491.91,actual
+2026-01-28,"SoFi","Other",-698.86,-1717.72,actual
+2026-01-27,"Chase","Other",-97.51,-1018.86,actual
+2026-01-27,"CVS Pharmacy","Healthcare",-35.00,-921.35,actual
+2026-01-27,"Chase","Other",-97.51,-886.35,actual
+2026-01-27,"CVS Pharmacy","Healthcare",-35.00,-788.84,actual
+2026-01-23,"Withdrawal Arc Predict","Other",-1000.00,-753.84,actual
+2026-01-23,"Withdrawal Arc Predict","Other",-1000.00,246.16,actual
+2026-01-21,"Mazda Financial","Auto",-397.72,1246.16,actual
+2026-01-21,"Mazda Financial","Auto",-397.72,1643.88,actual
+2026-01-16,"Withdrawal Johnsoncityenerg Elect_pymt","Other",-104.54,2041.60,actual
+2026-01-16,"Withdrawal Johnsoncityenerg Elect_pymt","Other",-104.54,2146.14,actual
+2026-01-15,"Transfer From Checking","Transfer",250.00,2250.68,actual
+2026-01-15,"Transfer From Checking","Transfer",250.00,2000.68,actual
+2026-01-15,"Transfer To Online Savings","Transfer",-250.00,1750.68,actual
+2026-01-15,"Transfer To Online Savings","Transfer",-250.00,2000.68,actual
+2026-01-14,"Early Pay Payroll Ach From Eastman Chemical","Income",2210.43,2250.68,actual
+2026-01-14,"Early Pay Payroll Ach From Eastman Chemical","Income",2210.43,40.25,actual
+2026-01-13,"Anthropic","Subscriptions",-21.90,-2170.18,actual
+2026-01-12,"Chase","Food & Drink",-35.00,-2148.28,actual
+2026-01-12,"Anthropic","Subscriptions",-21.90,-2113.28,actual
+2026-01-12,"Chase","Food & Drink",-35.00,-2091.38,actual
+2026-01-10,"Chase","Other",-299.00,-2056.38,actual
+2026-01-10,"Spotify","Subscriptions",-12.95,-1757.38,actual
+2026-01-10,"Spotify","Subscriptions",-12.95,-1744.43,actual
+2026-01-10,"Chase","Other",-299.00,-1731.48,actual
+2026-01-09,"Netflix","Subscriptions",-8.63,-1432.48,actual
+2026-01-08,"Netflix","Subscriptions",-8.63,-1423.85,actual
+2026-01-06,"Internet Payment - Thank You","Utilities",163.51,-1415.22,actual
+2026-01-06,"Withdrawal Discover E-","Other",-163.51,-1578.73,actual
+2026-01-06,"Withdrawal Discover E-","Other",-163.51,-1415.22,actual
+2026-01-05,"Internet Payment - Thank You","Utilities",163.51,-1251.71,actual
+2026-01-05,"Chase","Food & Drink",-17.70,-1415.22,actual
+2026-01-05,"Chase","Food & Drink",-17.70,-1397.52,actual
+2026-01-05,"Chase","Other",-427.00,-1379.82,actual
+2026-01-05,"Chase","Other",-427.00,-952.82,actual
+2026-01-02,"Apple Card","Other",-990.49,-525.82,actual
+2026-01-02,"Apple Card","Other",-990.49,464.67,actual
+2026-01-01,"Transfer To Online Savings","Transfer",-250.00,1455.16,actual
+2026-01-01,"Card Cashback Bonus Auto Redemption","Other",2.20,1705.16,actual
+2026-01-01,"Transfer From Checking","Transfer",250.00,1702.96,actual
+2026-01-01,"Transfer To Online Savings","Transfer",-250.00,1452.96,actual
+2026-01-01,"Card Cashback Bonus Auto Redemption","Other",2.20,1702.96,actual
+2026-01-01,"Transfer From Checking","Transfer",250.00,1700.76,actual
+2025-12-31,"Interest Paid","Other",19.10,1450.76,actual
+2025-12-31,"Interest Paid","Other",19.10,1431.66,actual
+2025-12-30,"Early Pay Payroll Ach From Eastman Chemical","Income",2213.25,1412.56,actual
+2025-12-30,"SoFi","Other",-698.86,-800.69,actual
+2025-12-30,"SoFi","Other",-698.86,-101.83,actual
+2025-12-30,"Early Pay Payroll Ach From Eastman Chemical","Income",2213.25,597.03,actual
+2025-12-29,"Zelle","Transfer",-1000.00,-1616.22,actual
+2025-12-29,"Zelle","Transfer",-1000.00,-616.22,actual
+2025-12-29,"CVS Pharmacy","Healthcare",-35.00,383.78,actual
+2025-12-29,"CVS Pharmacy","Healthcare",-35.00,418.78,actual
+2025-12-27,"Chase","Other",-97.50,453.78,actual
+2025-12-27,"Chase","Other",-97.50,551.28,actual
+2025-12-22,"Chase","Other",-20.69,648.78,actual
+2025-12-22,"Chase","Other",-20.69,669.47,actual
+2025-12-19,"Mazda Financial","Auto",-397.72,690.16,actual
+2025-12-19,"Chase","Other",-87.80,1087.88,actual
+2025-12-19,"Chase","Other",-87.80,1175.68,actual
+2025-12-19,"Mazda Financial","Auto",-397.72,1263.48,actual
+2025-12-18,"Transfer To Online Savings","Transfer",-250.00,1661.20,actual
+2025-12-18,"Transfer To Online Savings","Transfer",-250.00,1911.20,actual
+2025-12-18,"Withdrawal Johnsoncityenerg Elect_pymt","Other",-77.65,2161.20,actual
+2025-12-18,"Withdrawal Johnsoncityenerg Elect_pymt","Other",-77.65,2238.85,actual
+2025-12-18,"Transfer From Checking","Transfer",250.00,2316.50,actual
+2025-12-18,"Transfer From Checking","Transfer",250.00,2066.50,actual
+2025-12-17,"Early Pay Payroll Ach From Eastman Chemical","Income",2207.29,1816.50,actual
+2025-12-17,"Early Pay Payroll Ach From Eastman Chemical","Income",2207.29,-390.79,actual
+2025-12-15,"Zelle","Transfer",-1000.00,-2598.08,actual
+2025-12-15,"Withdrawal Discover E-","Other",-64.31,-1598.08,actual
+2025-12-15,"Zelle","Transfer",-1000.00,-1533.77,actual
+2025-12-15,"Withdrawal Discover E-","Other",-64.31,-533.77,actual
+2025-12-13,"Directpay Full Balance See Details Of Your Next Directpay Below","Other",64.31,-469.46,actual
+2025-12-12,"Directpay Full Balance See Details Of Your Next Directpay Below","Other",64.31,-533.77,actual
+2025-12-11,"Petscreening Service","Other",-30.00,-598.08,actual
+2025-12-10,"Petscreening Service","Other",-30.00,-568.08,actual
+2025-12-10,"Spotify","Subscriptions",-12.95,-538.08,actual
+2025-12-10,"Spotify","Subscriptions",-12.95,-525.13,actual
+2025-12-09,"Netflix","Subscriptions",-8.63,-512.18,actual
+2025-12-08,"Venmo","Transfer",-150.00,-503.55,actual
+2025-12-08,"Venmo","Transfer",-150.00,-353.55,actual
+2025-12-08,"Netflix","Subscriptions",-8.63,-203.55,actual
+2025-12-04,"Transfer To Online Savings","Transfer",-250.00,-194.92,actual
+2025-12-04,"Transfer From Checking","Transfer",250.00,55.08,actual
+2025-12-04,"Transfer To Online Savings","Transfer",-250.00,-194.92,actual
+2025-12-04,"Transfer From Checking","Transfer",250.00,55.08,actual
+2025-12-03,"Early Pay Payroll Ach From Eastman Chemical","Income",2207.29,-194.92,actual
+2025-12-03,"Early Pay Payroll Ach From Eastman Chemical","Income",2207.29,-2402.21,actual
+2025-12-02,"Amazon","Shopping",-61.89,-4609.50,actual
+2025-12-01,"Apple Card","Other",-1007.33,-4547.61,actual
+2025-12-01,"SoFi","Other",-698.86,-3540.28,actual
+2025-12-01,"Amazon","Shopping",-61.89,-2841.42,actual
+2025-12-01,"Apple Card","Other",-1007.33,-2779.53,actual
+2025-12-01,"SoFi","Other",-698.86,-1772.20,actual
+2025-12-01,"Card Cashback Bonus Auto Redemption","Other",9.00,-1073.34,actual
+2025-12-01,"Card Cashback Bonus Auto Redemption","Other",9.00,-1082.34,actual
+2025-11-30,"Interest Paid","Other",16.93,-1091.34,actual
+2025-11-30,"Interest Paid","Other",16.93,-1108.27,actual
+2025-11-30,"Amazon","Shopping",-20.20,-1125.20,actual
+2025-11-29,"Walgreens","Healthcare",-300.00,-1105.00,actual
+2025-11-29,"Amazon","Shopping",-20.20,-805.00,actual
+2025-11-29,"Walgreens","Healthcare",-300.00,-784.80,actual
+2025-11-28,"Chase","Other",-97.81,-484.80,actual
+2025-11-28,"Chase","Other",-96.00,-386.99,actual
+2025-11-28,"Chase","Other",-97.81,-290.99,actual
+2025-11-28,"CVS Pharmacy","Healthcare",-35.00,-193.18,actual
+2025-11-28,"Chase","Other",-96.00,-158.18,actual
+2025-11-28,"CVS Pharmacy","Healthcare",-35.00,-62.18,actual
+2025-11-27,"Walgreens","Healthcare",-300.00,-27.18,actual
+2025-11-27,"Walgreens","Healthcare",-300.00,272.82,actual
+2025-11-26,"Zelle","Transfer",40.00,572.82,actual
+2025-11-26,"Zelle","Transfer",40.00,532.82,actual
+2025-11-26,"Amazon","Shopping",-42.79,492.82,actual
+2025-11-25,"Amazon","Shopping",-42.79,535.61,actual
+2025-11-24,"Venmo","Transfer",-35.00,578.40,actual
+2025-11-24,"Venmo","Transfer",-35.00,613.40,actual
+2025-11-20,"Transfer To Online Savings","Transfer",-250.00,648.40,actual
+2025-11-20,"Transfer From Checking","Transfer",250.00,898.40,actual
+2025-11-20,"Transfer To Online Savings","Transfer",-250.00,648.40,actual
+2025-11-20,"Transfer From Checking","Transfer",250.00,898.40,actual

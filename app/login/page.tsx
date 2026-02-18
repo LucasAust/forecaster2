@@ -6,7 +6,15 @@ export default async function LoginPage({
 }: {
     searchParams: Promise<{ error?: string; message?: string }>
 }) {
-    const { error, message } = await searchParams;
+    const { error: rawError, message: rawMessage } = await searchParams;
+
+    // Safely decode URL params — malformed percent-encoded strings crash decodeURIComponent
+    const safeDecodeURI = (s: string | undefined) => {
+        if (!s) return undefined;
+        try { return decodeURIComponent(s); } catch { return s; }
+    };
+    const error = safeDecodeURI(rawError);
+    const message = safeDecodeURI(rawMessage);
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-4">
@@ -25,13 +33,13 @@ export default async function LoginPage({
 
                 {error && (
                     <div className="rounded-xl bg-red-500/10 p-4 text-sm text-red-500 border border-red-500/20 text-center">
-                        {decodeURIComponent(error)}
+                        {error}
                     </div>
                 )}
 
                 {message && (
                     <div className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-400 border border-emerald-500/20 text-center">
-                        {decodeURIComponent(message)}
+                        {message}
                     </div>
                 )}
 

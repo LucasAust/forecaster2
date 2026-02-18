@@ -32,8 +32,8 @@ export function BalanceChart({ className = "h-[200px]", days = 30 }: { className
     if (!forecast || data.length === 0) {
         return (
             <div className={`${className} w-full flex flex-col items-center justify-center text-zinc-500`}>
-                <p>No forecast available</p>
-                <p className="text-xs mt-1">Connect a bank account to generate predictions</p>
+                <p>Forecast is being generated...</p>
+                <p className="text-xs mt-1">This may take a moment after connecting your accounts</p>
             </div>
         );
     }

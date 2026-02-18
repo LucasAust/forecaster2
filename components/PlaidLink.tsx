@@ -12,23 +12,12 @@ export function PlaidLink() {
     const [loading, setLoading] = useState(true);
     const [isSyncingAfterConnect, setIsSyncingAfterConnect] = useState(false);
 
-    const [isConnected, setIsConnected] = useState(false);
+    const { accounts, transactions } = useSync();
+    // Determine if connected from SyncContext data (avoids expensive /api/transactions call)
+    const isConnected = (accounts && accounts.length > 0) || (transactions && transactions.length > 0);
 
     useEffect(() => {
         let cancelled = false;
-
-        const checkConnection = async () => {
-            try {
-                const res = await authFetch('/api/transactions');
-                const data = await res.json();
-                if (!cancelled && data.transactions && data.transactions.length > 0) {
-                    setIsConnected(true);
-                }
-            } catch (e) {
-                console.error("Failed to check connection", e);
-            }
-        };
-        checkConnection();
 
         const createLinkToken = async () => {
             try {
