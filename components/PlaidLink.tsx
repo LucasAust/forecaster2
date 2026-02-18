@@ -54,7 +54,6 @@ export function PlaidLink() {
                 }),
             });
 
-            setIsConnected(true);
             // Trigger a global sync — retry if Plaid hasn't made transactions available yet
             await triggerUpdate({ retryOnEmpty: true });
 
