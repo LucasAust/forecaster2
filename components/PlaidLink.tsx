@@ -63,8 +63,8 @@ export function PlaidLink() {
             });
 
             setIsConnected(true);
-            // Trigger a global sync to fetch the new data
-            await triggerUpdate();
+            // Trigger a global sync — retry if Plaid hasn't made transactions available yet
+            await triggerUpdate({ retryOnEmpty: true });
 
         } catch (error) {
             console.error('Error exchanging public token:', error);

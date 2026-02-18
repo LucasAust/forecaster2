@@ -243,7 +243,7 @@ export interface SyncState {
     isSyncing: boolean;
     syncProgress: number;
     lastUpdated: Date | null;
-    triggerUpdate: () => Promise<void>;
+    triggerUpdate: (options?: { retryOnEmpty?: boolean }) => Promise<void>;
     transactions: Transaction[];
     forecast: Forecast | null;
     balance: number;

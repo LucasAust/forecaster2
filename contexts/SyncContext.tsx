@@ -65,15 +65,32 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const triggerUpdate = useCallback(async () => {
+    const triggerUpdate = useCallback(async (options?: { retryOnEmpty?: boolean }) => {
         if (isSyncing) return;
         setIsSyncing(true);
         setError(null);
         setSyncProgress(10);
         setLoadingStage('transactions');
 
+        const maxRetries = options?.retryOnEmpty ? 5 : 0;
+        let attempt = 0;
+        let data: { transactions: Transaction[]; accounts: PlaidAccount[] } = { transactions: [], accounts: [] };
+
         try {
-            const data = await fetchTransactions(true);
+            // Fetch transactions — with optional retry for newly connected accounts
+            // where Plaid may not have data ready immediately
+            while (attempt <= maxRetries) {
+                data = await fetchTransactions(true);
+                if (data.transactions && data.transactions.length > 0) break;
+                if (attempt < maxRetries) {
+                    attempt++;
+                    setSyncProgress(10 + attempt * 8);
+                    await new Promise(r => setTimeout(r, 3000)); // wait 3s before retry
+                } else {
+                    break;
+                }
+            }
+
             setTransactions(data.transactions || []);
 
             if (data.accounts) {

@@ -33,9 +33,32 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /youtube\s*(premium|music)?/i, name: "YouTube" },
     { pattern: /amazon\s*prime/i, name: "Amazon Prime" },
     { pattern: /audible/i, name: "Audible" },
-    { pattern: /claude\.?ai|anthropic/i, name: "Claude AI" },
-    { pattern: /openai|chatgpt/i, name: "ChatGPT" },
+    { pattern: /claude\.?ai|anthropic/i, name: "Anthropic" },
+    { pattern: /openai|chatgpt/i, name: "OpenAI" },
     { pattern: /adobe/i, name: "Adobe" },
+    { pattern: /playstation|psn/i, name: "PlayStation" },
+    { pattern: /help\.?max\.?com|\bmax\.com/i, name: "Max" },
+    { pattern: /creem\.?io/i, name: "Creem.io" },
+
+    // Dev Tools / SaaS
+    { pattern: /digitalocean|digital\s*ocean/i, name: "DigitalOcean" },
+    { pattern: /supabase/i, name: "Supabase" },
+    { pattern: /github/i, name: "GitHub" },
+    { pattern: /google\s*cloud|gcp|google\s*\*cloud/i, name: "Google Cloud" },
+    { pattern: /codetwo|code\s*two/i, name: "CodeTwo" },
+    { pattern: /li\s*drum\s*bus/i, name: "LI Drum Bus" },
+    { pattern: /render\.?com|render\s/i, name: "Render" },
+    { pattern: /vercel/i, name: "Vercel" },
+    { pattern: /railway/i, name: "Railway" },
+    { pattern: /aws|amazon\s*web/i, name: "AWS" },
+
+    // Rent / Housing
+    { pattern: /\bbilt\b/i, name: "Bilt (Rent)" },
+
+    // Utilities
+    { pattern: /dominion\s*energy|dominion\s*va/i, name: "Dominion Energy" },
+    { pattern: /pg&?e|pacific\s*gas/i, name: "PG&E" },
+    { pattern: /duke\s*energy/i, name: "Duke Energy" },
 
     // Food & Drink
     { pattern: /starbucks/i, name: "Starbucks" },
@@ -49,6 +72,12 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /doordash/i, name: "DoorDash" },
     { pattern: /grubhub/i, name: "Grubhub" },
     { pattern: /uber\s*eat/i, name: "Uber Eats" },
+    { pattern: /waffle\s*house/i, name: "Waffle House" },
+    { pattern: /cookout/i, name: "Cook Out" },
+    { pattern: /cava\b/i, name: "CAVA" },
+    { pattern: /wingstop/i, name: "Wingstop" },
+    { pattern: /panda\s*express/i, name: "Panda Express" },
+    { pattern: /tropical\s*smoothie/i, name: "Tropical Smoothie" },
 
     // Transport
     { pattern: /uber(?!\s*eat)/i, name: "Uber" },
@@ -56,6 +85,9 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /chevron/i, name: "Chevron" },
     { pattern: /shell\s*(oil)?/i, name: "Shell" },
     { pattern: /exxon/i, name: "ExxonMobil" },
+    { pattern: /speedway/i, name: "Speedway" },
+    { pattern: /bp\b/i, name: "BP" },
+    { pattern: /wawa/i, name: "Wawa" },
 
     // Shopping
     { pattern: /amazon(?!\s*prime)\.?com?/i, name: "Amazon" },
@@ -74,23 +106,23 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /kroger/i, name: "Kroger" },
     { pattern: /publix/i, name: "Publix" },
     { pattern: /aldi/i, name: "Aldi" },
-
-    // Utilities
-    { pattern: /pg&?e|pacific\s*gas/i, name: "PG&E" },
+    { pattern: /harris\s*teeter/i, name: "Harris Teeter" },
+    { pattern: /food\s*lion/i, name: "Food Lion" },
 
     // Insurance
     { pattern: /geico/i, name: "GEICO" },
     { pattern: /state\s*farm/i, name: "State Farm" },
     { pattern: /progressive/i, name: "Progressive" },
 
-    // Health
+    // Health / Pharmacy
     { pattern: /cvs/i, name: "CVS Pharmacy" },
     { pattern: /walgreens/i, name: "Walgreens" },
 
-    // Transfers
+    // Transfers / P2P
     { pattern: /zelle/i, name: "Zelle" },
     { pattern: /venmo/i, name: "Venmo" },
     { pattern: /cash\s*app/i, name: "Cash App" },
+    { pattern: /robinhood/i, name: "Robinhood" },
 ];
 
 /** Noise words to strip from raw merchant names */

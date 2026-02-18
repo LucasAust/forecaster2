@@ -54,22 +54,24 @@ const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
     // Income
     { keywords: ["payroll", "direct dep", "salary", "wage", "income", "deposit", "paycheck"], category: "Income" },
     // Transfers
-    { keywords: ["transfer", "zelle", "venmo", "cashapp", "cash app", "xfer"], category: "Transfer" },
+    { keywords: ["transfer", "zelle", "venmo", "cashapp", "cash app", "xfer", "robinhood"], category: "Transfer" },
     // Housing
-    { keywords: ["rent", "mortgage", "hoa", "property tax", "landlord", "apartment", "real estate"], category: "Housing" },
+    { keywords: ["rent", "mortgage", "hoa", "property tax", "landlord", "apartment", "real estate", "bilt"], category: "Housing" },
     // Auto / Transport (note: "uber" and "subway" removed — they match Food & Drink brands first)
     { keywords: ["mazda", "ford motor", "auto loan", "car payment", "car loan", "auto pay"], category: "Auto" },
+    // Dev Tools / SaaS (must come before Subscriptions to win)
+    { keywords: ["digitalocean", "digital ocean", "supabase", "github", "google cloud", "gcp", "codetwo", "code two", "render.com", "vercel", "railway", "aws ", "amazon web", "heroku", "netlify", "anthropic", "openai", "li drum bus", "creem", "bolt stackblitz", "stackblitz"], category: "Subscriptions" },
     // Food & Drink — placed ABOVE Transport so "uber eat" and "subway" match here first
-    { keywords: ["starbucks", "mcdonald", "burger", "coffee", "restaurant", "food", "cafe", "pizza", "taco", "chipotle", "subway", "doordash", "grubhub", "uber eat", "postmates", "panera", "chick-fil", "dunkin", "wendy", "domino", "panda express", "five guys", "in-n-out", "jack in the box", "popeyes", "dine", "dining", "bar ", "pub ", "brew", "bakery"], category: "Food & Drink" },
-    { keywords: ["lyft", "chevron", "shell", "gas", "exxon", "bp ", "mobil", "texaco", "citgo", "fuel", "sunoco", "parking", "toll", "transit", "metro", "bus fare", "uber trip"], category: "Transport" },
+    { keywords: ["starbucks", "mcdonald", "burger", "coffee", "restaurant", "food", "cafe", "pizza", "taco", "chipotle", "subway", "doordash", "grubhub", "uber eat", "postmates", "panera", "chick-fil", "dunkin", "wendy", "domino", "panda express", "five guys", "in-n-out", "jack in the box", "popeyes", "dine", "dining", "bar ", "pub ", "brew", "bakery", "waffle house", "cookout", "cava", "wingstop", "tropical smoothie"], category: "Food & Drink" },
+    { keywords: ["lyft", "chevron", "shell", "gas", "exxon", "bp ", "mobil", "texaco", "citgo", "fuel", "sunoco", "parking", "toll", "transit", "metro", "bus fare", "uber trip", "speedway", "wawa"], category: "Transport" },
     // Groceries
     { keywords: ["safeway", "whole foods", "trader joe", "market", "costco", "grocery", "kroger", "publix", "aldi", "wegmans", "heb", "food lion", "piggly", "sprouts", "ralph", "harris teeter", "winco", "albertson", "meijer", "stop & shop", "giant"], category: "Groceries" },
     // Subscriptions
-    { keywords: ["netflix", "spotify", "hulu", "disney+", "disney plus", "apple music", "youtube", "amazon prime", "hbo", "paramount", "peacock", "crunchyroll", "audible", "claude", "openai", "chatgpt", "adobe", "dropbox", "icloud", "google storage", "microsoft 365", "office 365", "canva", "notion", "github", "gym member", "membership"], category: "Subscriptions" },
+    { keywords: ["netflix", "spotify", "hulu", "disney+", "disney plus", "apple music", "youtube", "amazon prime", "hbo", "max.com", "help.max", "paramount", "peacock", "crunchyroll", "audible", "claude", "chatgpt", "adobe", "dropbox", "icloud", "google storage", "microsoft 365", "office 365", "canva", "notion", "gym member", "membership", "playstation", "psn", "xbox", "nintendo"], category: "Subscriptions" },
     // Entertainment
-    { keywords: ["cinema", "movie", "theater", "theatre", "concert", "ticket", "game", "steam", "playstation", "xbox", "nintendo", "twitch", "sport", "bowling", "arcade", "golf", "amusement", "museum", "zoo"], category: "Entertainment" },
+    { keywords: ["cinema", "movie", "theater", "theatre", "concert", "ticket", "game", "steam", "twitch", "sport", "bowling", "arcade", "golf", "amusement", "museum", "zoo"], category: "Entertainment" },
     // Utilities
-    { keywords: ["pge", "pg&e", "water", "electric", "internet", "at&t", "att ", "verizon", "t-mobile", "tmobile", "comcast", "xfinity", "spectrum", "utility", "utilities", "gas bill", "sewer", "trash", "waste management", "power"], category: "Utilities" },
+    { keywords: ["dominion energy", "dominion va", "pge", "pg&e", "water", "electric", "internet", "at&t", "att ", "verizon", "t-mobile", "tmobile", "comcast", "xfinity", "spectrum", "utility", "utilities", "gas bill", "sewer", "trash", "waste management", "power", "duke energy"], category: "Utilities" },
     // Insurance
     { keywords: ["insurance", "geico", "state farm", "allstate", "progressive", "usaa", "liberty mutual", "farmers", "nationwide", "premium"], category: "Insurance" },
     // Healthcare
@@ -96,10 +98,21 @@ export function inferCategory(tx: {
     name?: string;
     merchant?: string;
 }): Category {
-    // 1. Check existing Plaid category data
+    const name = (tx.merchant_name || tx.name || tx.merchant || "").toLowerCase();
+
+    // 1. ALWAYS check keyword rules first for high-confidence merchant matches
+    //    This prevents Plaid mis-labeling (e.g., DigitalOcean → "Shopping")
+    if (name) {
+        for (const rule of CATEGORY_RULES) {
+            if (rule.keywords.some(kw => name.includes(kw))) {
+                return rule.category;
+            }
+        }
+    }
+
+    // 2. Fall back to Plaid category data
     const existingCategory = Array.isArray(tx.category) ? tx.category[0] : tx.category;
     if (existingCategory && existingCategory !== "Uncategorized" && existingCategory !== "null") {
-        // Map Plaid categories to our categories if possible
         const plaidLower = existingCategory.toLowerCase();
         if (plaidLower.includes("food") || plaidLower.includes("restaurant")) return "Food & Drink";
         if (plaidLower.includes("travel") || plaidLower.includes("airline")) return "Travel";
@@ -107,19 +120,14 @@ export function inferCategory(tx: {
         if (plaidLower.includes("transfer")) return "Transfer";
         if (plaidLower.includes("payment") && plaidLower.includes("rent")) return "Housing";
         if (plaidLower.includes("recreation") || plaidLower.includes("entertainment")) return "Entertainment";
-        // If it matches one of our categories exactly, use it
+        if (plaidLower.includes("gas") || plaidLower.includes("fuel")) return "Transport";
+        if (plaidLower.includes("grocer")) return "Groceries";
+        if (plaidLower.includes("health") || plaidLower.includes("pharmacy")) return "Healthcare";
+        if (plaidLower.includes("education")) return "Education";
+        if (plaidLower.includes("personal")) return "Personal Care";
+        if (plaidLower.includes("auto")) return "Auto";
         const match = CATEGORIES.find(c => c.toLowerCase() === plaidLower);
         if (match) return match;
-    }
-
-    // 2. Keyword-based matching from merchant name
-    const name = (tx.merchant_name || tx.name || tx.merchant || "").toLowerCase();
-    if (!name) return "Other";
-
-    for (const rule of CATEGORY_RULES) {
-        if (rule.keywords.some(kw => name.includes(kw))) {
-            return rule.category;
-        }
     }
 
     return "Other";
