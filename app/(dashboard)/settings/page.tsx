@@ -27,6 +27,8 @@ export default async function SettingsPage() {
         factor_type: f.factor_type,
         status: f.status,
         friendly_name: f.friendly_name || undefined,
+        created_at: f.created_at,
+        updated_at: f.updated_at,
     }));
 
     return (

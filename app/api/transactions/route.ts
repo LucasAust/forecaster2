@@ -139,9 +139,21 @@ export async function GET(request: Request) {
 
             } catch (err: unknown) {
                 console.error(`Error syncing item ${item.item_id}:`, err);
-                const plaidErr = err as { response?: { data?: unknown } };
+                const plaidErr = err as { response?: { data?: { error_code?: string } } };
                 if (plaidErr.response) {
                     console.error('Plaid Sync Error Details:', JSON.stringify(plaidErr.response.data, null, 2));
+
+                    // Auto-cleanup: if Plaid says the item no longer exists, remove it
+                    // so it doesn't keep failing on every future sync.
+                    const errorCode = plaidErr.response.data?.error_code;
+                    if (errorCode === 'ITEM_NOT_FOUND' || errorCode === 'ITEM_LOGIN_REQUIRED') {
+                        console.warn(`Removing stale plaid item ${item.item_id} (${errorCode})`);
+                        await supabase
+                            .from('plaid_items')
+                            .delete()
+                            .eq('item_id', item.item_id)
+                            .eq('user_id', user.id);
+                    }
                 }
             }
         }
