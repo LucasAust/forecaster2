@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { fetchTransactions, fetchForecast, authFetch } from '@/lib/api';
 import type { Transaction, Forecast, PlaidAccount, LoadingStage, SyncState } from '@/types';
 
@@ -29,6 +29,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
     const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
     const [error, setError] = useState<string | null>(null);
+    const isSyncingRef = useRef(false);
 
     // Load initial data from cache on mount
     useEffect(() => {
@@ -36,7 +37,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const loadInitialData = async () => {
-        if (isSyncing) return;
+        if (isSyncingRef.current) return;
+        isSyncingRef.current = true;
         setIsSyncing(true);
         try {
             setLoadingStage('transactions');
@@ -61,12 +63,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             setError("Failed to load your financial data. Please refresh.");
             setLoadingStage('idle');
         } finally {
+            isSyncingRef.current = false;
             setIsSyncing(false);
         }
     };
 
     const triggerUpdate = useCallback(async (options?: { retryOnEmpty?: boolean }) => {
-        if (isSyncing) return;
+        if (isSyncingRef.current) return;
+        isSyncingRef.current = true;
         setIsSyncing(true);
         setError(null);
         setSyncProgress(10);
@@ -121,10 +125,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             setError("Failed to sync data. Please try again.");
             setLoadingStage('complete');
         } finally {
+            isSyncingRef.current = false;
             setIsSyncing(false);
             setTimeout(() => setSyncProgress(0), 2000);
         }
-    }, [isSyncing]);
+    }, []);
 
     return (
         <SyncContext.Provider value={{

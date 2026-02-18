@@ -5,11 +5,12 @@ import { usePlaidLink, PlaidLinkOnSuccess, PlaidLinkOptions } from 'react-plaid-
 import { useSync } from "@/contexts/SyncContext";
 import { authFetch } from "@/lib/api";
 
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, CheckCircle2 } from 'lucide-react';
 
 export function PlaidLink() {
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSyncingAfterConnect, setIsSyncingAfterConnect] = useState(false);
 
     const [isConnected, setIsConnected] = useState(false);
 
@@ -51,6 +52,8 @@ export function PlaidLink() {
 
     const onSuccess = useCallback<PlaidLinkOnSuccess>(async (public_token, metadata) => {
         try {
+            setIsSyncingAfterConnect(true);
+
             await authFetch('/api/plaid/exchange_public_token', {
                 method: 'POST',
                 headers: {
@@ -68,6 +71,8 @@ export function PlaidLink() {
 
         } catch (error) {
             console.error('Error exchanging public token:', error);
+        } finally {
+            setIsSyncingAfterConnect(false);
         }
     }, [triggerUpdate]);
 
@@ -89,16 +94,22 @@ export function PlaidLink() {
 
     return (
         <div className="flex flex-col gap-2">
-            {isConnected && (
+            {isConnected && !isSyncingAfterConnect && (
                 <div className="flex items-center gap-2 rounded-xl bg-green-600/20 px-4 py-2 text-sm font-medium text-green-500 border border-green-600/20">
-                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    <CheckCircle2 className="h-4 w-4" />
                     Bank Connected
+                </div>
+            )}
+            {isSyncingAfterConnect && (
+                <div className="flex items-center gap-2 rounded-xl bg-blue-600/20 px-4 py-2 text-sm font-medium text-blue-400 border border-blue-600/20">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing your transactions...
                 </div>
             )}
             <button
                 type="button"
                 onClick={() => open()}
-                disabled={!ready}
+                disabled={!ready || isSyncingAfterConnect}
                 className="group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
             >
                 <Plus className="h-4 w-4" />

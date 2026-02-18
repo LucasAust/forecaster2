@@ -31,7 +31,7 @@ export default function Home() {
 }
 
 function DashboardContent() {
-  const { loadingStage, transactions, forecast, balance } = useSync();
+  const { loadingStage, transactions, forecast, balance, isSyncing, syncProgress } = useSync();
   const { isVisible } = useDashboardLayout();
   const [forecastDays, setForecastDays] = useState(30);
   const [displayName, setDisplayName] = useState("User");
@@ -73,12 +73,32 @@ function DashboardContent() {
     }
   };
 
-  if (loadingStage === 'transactions' && transactions.length === 0) {
+  if (isSyncing && transactions.length === 0) {
+    const stageMessage = loadingStage === 'forecast'
+      ? 'Running AI prediction models...'
+      : loadingStage === 'transactions'
+        ? 'Syncing your financial data...'
+        : 'Connecting to your accounts...';
+
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-zinc-400">Syncing your financial data...</p>
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full blur-xl bg-blue-500/20 animate-pulse" />
+            <Loader2 className="h-10 w-10 animate-spin text-blue-500 relative z-10" />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-white font-medium">{stageMessage}</p>
+            <p className="text-zinc-500 text-sm">This may take a moment for new accounts</p>
+          </div>
+          {syncProgress > 0 && (
+            <div className="w-48 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${syncProgress}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
