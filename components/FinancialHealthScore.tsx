@@ -5,6 +5,7 @@ import { useSync } from "@/contexts/SyncContext";
 import { usePreferences } from "@/contexts/PreferencesContext";
 import { inferCategory } from "@/lib/categories";
 import { TrendingUp, TrendingDown, Shield, PiggyBank, CreditCard, Wallet } from "lucide-react";
+import { SkeletonHealthScore } from "@/components/Skeleton";
 import type { Transaction, PlaidAccount } from "@/types";
 
 interface SubScore {
@@ -41,7 +42,7 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 }
 
 export function FinancialHealthScore() {
-    const { transactions, balance, accounts } = useSync();
+    const { transactions, balance, accounts, loadingStage } = useSync();
     const { prefs } = usePreferences();
 
     const { totalScore, subScores } = useMemo(() => {
@@ -163,6 +164,10 @@ export function FinancialHealthScore() {
             subScores: scores,
         };
     }, [transactions, balance, accounts, prefs.category_limits]);
+
+    if (loadingStage === 'transactions' || loadingStage === 'forecast') {
+        return <SkeletonHealthScore />;
+    }
 
     const { label: scoreLabel, color: labelColor } = getScoreLabel(totalScore);
     const gaugeColor = getScoreColor(totalScore);

@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { Transaction, Forecast, AISuggestion, ChatMessage } from "@/types";
+import type { Transaction, Forecast, AISuggestion, ChatMessage, ClarificationQuestion } from "@/types";
 import {
     generateDeterministicForecast,
     validateForecast,
@@ -24,6 +24,89 @@ export const geminiClient = {
      *  - Discretionary items: statistically sampled from historical distributions.
      *  - Result: faster, cheaper, and far more accurate than LLM scheduling.
      */
+    /**
+     * Identify up to 5 ambiguous transactions and generate clarification questions.
+     *
+     * "Ambiguous" means the app isn't confident about the category or intent of the
+     * transaction — e.g., generic merchant names, large one-off amounts, transfers
+     * that might be income, unusual merchant patterns, etc.
+     *
+     * Returns at most 5 questions with multiple-choice options so the user can
+     * answer quickly without typing.
+     */
+    generateClarificationQuestions: async (transactions: Transaction[]): Promise<{ questions: ClarificationQuestion[] }> => {
+        const genAI = getGenAI();
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+            generationConfig: { temperature: 0, responseMimeType: "application/json" },
+        });
+
+        // Pick up to the 100 most recent transactions to keep the prompt small
+        const sample = transactions.slice(0, 100).map(t => ({
+            id: t.transaction_id,
+            name: t.merchant_name || t.name,
+            amount: t.amount,
+            date: t.date,
+            category: Array.isArray(t.category) ? t.category[0] : t.category,
+        }));
+
+        const prompt = `
+You are a financial data analyst helping a budgeting app categorize transactions accurately.
+
+Review the following transactions and identify UP TO 5 that are genuinely ambiguous — where it is unclear from the name alone whether they are:
+- A regular recurring expense vs. a one-time purchase
+- A personal expense vs. a reimbursable business cost
+- A transfer to another account vs. actual spending
+- Income vs. a refund
+- A known subscription vs. an unknown charge
+
+For each ambiguous transaction you find, generate ONE concise multiple-choice clarification question.
+
+Rules:
+- Select ONLY transactions that are truly unclear. Skip obvious ones (e.g., "Netflix" = subscription, "Starbucks" = dining).
+- Prioritize larger amounts (higher dollar value) and generic merchant names.
+- Maximum 5 questions total.
+- Each question must have EXACTLY 3-4 short answer options.
+- The category_mappings array must parallel the options array, using one of these exact strings:
+  "Food & Drink", "Shopping", "Travel", "Housing", "Utilities", "Transportation",
+  "Health & Wellness", "Entertainment", "Subscriptions", "Transfer", "Income",
+  "Business Services", "Personal Care", "Gifts & Donations", "Other"
+
+Transactions: ${JSON.stringify(sample)}
+
+Output ONLY valid JSON in this exact shape (no markdown, no extra text):
+{
+  "questions": [
+    {
+      "transaction_id": "<id from the input>",
+      "transaction_name": "<merchant or name>",
+      "amount": <number>,
+      "date": "<YYYY-MM-DD>",
+      "question": "<concise question, max 15 words>",
+      "options": ["Option A", "Option B", "Option C"],
+      "category_mappings": ["Category A", "Category B", "Category C"]
+    }
+  ]
+}
+
+If there are no genuinely ambiguous transactions, return: { "questions": [] }
+`;
+
+        try {
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const parsed = JSON.parse(text) as { questions: ClarificationQuestion[] };
+            // Enforce max 5, ensure arrays are parallel
+            const safe = (parsed.questions || [])
+                .filter(q => q.options?.length > 0 && q.options.length === q.category_mappings?.length)
+                .slice(0, 5);
+            return { questions: safe };
+        } catch (error) {
+            console.error("Gemini Clarification Error:", error);
+            return { questions: [] };
+        }
+    },
+
     generateForecast: async (history: Transaction[]): Promise<Forecast> => {
         // Generate the full forecast deterministically — no LLM needed
         const forecast = generateDeterministicForecast(history);

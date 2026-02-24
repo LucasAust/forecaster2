@@ -4,6 +4,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Ca
 import { useEffect, useState } from "react";
 import { useSync } from "@/contexts/SyncContext";
 import { processForecastData } from "@/lib/api";
+import { SkeletonChart } from "@/components/Skeleton";
 
 export function ForecastGraph({ days = 30 }: { days?: number }) {
     const { forecast, balance, loadingStage } = useSync();
@@ -19,16 +20,11 @@ export function ForecastGraph({ days = 30 }: { days?: number }) {
         }
     }, [forecast, balance, days]);
 
-    if (!mounted) return <div className="h-[400px] w-full flex items-center justify-center text-zinc-500">Loading...</div>;
+    if (!mounted || loadingStage === 'transactions' || loadingStage === 'forecast') {
+        return <SkeletonChart className="h-[400px]" />;
+    }
 
-    if (loadingStage === 'forecast') return <div className="h-[400px] w-full flex items-center justify-center text-zinc-500">Loading forecast...</div>;
-
-    if (!forecast) return (
-        <div className="h-[400px] w-full flex flex-col items-center justify-center text-zinc-500">
-            <p>No forecast available</p>
-            <p className="text-xs mt-1">Connect a bank account to generate predictions</p>
-        </div>
-    );
+    if (!forecast) return <SkeletonChart className="h-[400px]" />;
 
     return (
         <div className="h-[400px] w-full min-h-[100px] min-w-[100px]">

@@ -4,6 +4,7 @@ import { ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "rec
 import { useEffect, useState } from "react";
 import { processForecastData } from "@/lib/api";
 import { useSync } from "@/contexts/SyncContext";
+import { SkeletonChart } from "@/components/Skeleton";
 
 export function BalanceChart({ className = "h-[200px]", days = 30 }: { className?: string, days?: number }) {
     const { forecast, loadingStage, balance } = useSync();
@@ -22,20 +23,12 @@ export function BalanceChart({ className = "h-[200px]", days = 30 }: { className
         setMounted(true);
     }, []);
 
-    if (!mounted) return <div className={`${className} w-full flex items-center justify-center text-zinc-500`}>Loading...</div>;
-
-    // Only show loading if we are actively fetching the forecast
-    if (loadingStage === 'forecast') {
-        return <div className={`${className} w-full flex items-center justify-center text-zinc-500`}>Loading forecast...</div>;
+    if (!mounted || loadingStage === 'transactions' || loadingStage === 'forecast') {
+        return <SkeletonChart className={className} />;
     }
 
     if (!forecast || data.length === 0) {
-        return (
-            <div className={`${className} w-full flex flex-col items-center justify-center text-zinc-500`}>
-                <p>Forecast is being generated...</p>
-                <p className="text-xs mt-1">This may take a moment after connecting your accounts</p>
-            </div>
-        );
+        return <SkeletonChart className={className} />;
     }
 
     return (

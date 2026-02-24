@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition, CountUp } from "@/components/MotionWrappers";
 import { inferCategory } from "@/lib/categories";
 import { CategoryBudgets } from "@/components/CategoryBudgets";
+import { SkeletonCard } from "@/components/Skeleton";
 import type { Transaction } from "@/types";
 
 /** Budget page uses a normalized shape where category is always string[] and amount is always positive */
@@ -24,7 +25,7 @@ const SubscriptionManager = dynamic(() => import("@/components/SubscriptionManag
 const AIBudgetRecommendations = dynamic(() => import("@/components/AIBudgetRecommendations").then(m => ({ default: m.AIBudgetRecommendations })), { loading: () => <div className="h-40 glass-card rounded-2xl animate-pulse" /> });
 const FinancialReports = dynamic(() => import("@/components/FinancialReports").then(m => ({ default: m.FinancialReports })), { loading: () => <div className="h-40 glass-card rounded-2xl animate-pulse" /> });
 export default function BudgetPage() {
-    const { transactions, forecast, isSyncing } = useSync();
+    const { transactions, forecast, isSyncing, loadingStage } = useSync();
     const [monthlyTarget, setMonthlyTarget] = useState<number>(0);
     const [isEditingTarget, setIsEditingTarget] = useState(false);
     const [tempTarget, setTempTarget] = useState("");
@@ -171,6 +172,14 @@ export default function BudgetPage() {
 
             {/* Top Cards */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {(loadingStage === 'transactions' || loadingStage === 'forecast') && transactions.length === 0 ? (
+                    <>
+                        <SkeletonCard />
+                        <SkeletonCard />
+                        <SkeletonCard />
+                    </>
+                ) : (
+                <>
                 {/* Monthly Target Card */}
                 <div className="glass-card rounded-2xl p-6 relative group">
                     <div className="flex items-center justify-between">
@@ -291,6 +300,8 @@ export default function BudgetPage() {
                         </p>
                     </div>
                 </div>
+                </>
+                )}
             </div>
 
             {/* Category Progress Rings */}

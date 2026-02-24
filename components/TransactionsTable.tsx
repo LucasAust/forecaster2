@@ -8,6 +8,7 @@ import { inferCategory } from "@/lib/categories";
 import { getDisplayMerchant } from "@/lib/merchants";
 import { TransactionDrawer } from "@/components/TransactionDrawer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { SkeletonTable } from "@/components/Skeleton";
 import type { DisplayTransaction, ExportRow } from "@/types";
 
 const PAGE_SIZE = 30;
@@ -156,7 +157,7 @@ export const TransactionsTable = forwardRef<TransactionsTableHandle, {
     }, [filter, searchQuery, dateFrom, dateTo, amountMin, amountMax, categoryFilter]);
 
     if (loadingStage === 'transactions' && transactions.length === 0) {
-        return <div className="text-sm text-zinc-500 p-6">Loading transactions...</div>;
+        return <SkeletonTable rows={8} />;
     }
 
     if (filtered.length === 0) {

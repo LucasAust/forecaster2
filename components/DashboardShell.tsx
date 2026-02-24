@@ -8,11 +8,19 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-    const { loadingStage, transactions, error } = useSync();
+    const { loadingStage, transactions, error, isSyncing } = useSync();
     // Add a minimum loading time to prevent flashing if cache is super fast
     const [showLoading, setShowLoading] = useState(true);
     const [showTutorial, setShowTutorial] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    // Track last active sync stage for the banner label (avoids TS overlap with 'complete')
+    const [syncStageLabel, setSyncStageLabel] = useState<'transactions' | 'forecast'>('transactions');
+
+    useEffect(() => {
+        if (loadingStage === 'transactions' || loadingStage === 'forecast') {
+            setSyncStageLabel(loadingStage);
+        }
+    }, [loadingStage]);
 
     useEffect(() => {
         if (loadingStage === 'complete') {
@@ -28,7 +36,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         }
     }, [loadingStage, transactions]);
 
-    const isLoading = loadingStage !== 'complete' || showLoading;
+    // Only show full-screen overlay during initial load (no data yet).
+    // Background syncs (re-syncs with existing data) use the thin banner below instead.
+    const isLoading = (loadingStage !== 'complete' || showLoading) && transactions.length === 0;
 
     return (
         <>
@@ -63,6 +73,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                             <RefreshCw className="h-4 w-4" />
                             Reload
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Re-sync progress banner — shown only when we already have data visible
+                but a background refresh is running (bank connect, manual refresh, etc.) */}
+            {isSyncing && !isLoading && !error && (
+                <div className="fixed top-0 inset-x-0 z-[90] pointer-events-none">
+                    {/* thin indeterminate progress bar */}
+                    <div className="h-[3px] w-full bg-blue-900/40 overflow-hidden">
+                        <div className="h-full w-[45%] bg-blue-500 rounded-full animate-[slide_1.4s_ease-in-out_infinite]" />
+                    </div>
+                    <div className="flex items-center justify-center gap-2 bg-blue-950/80 backdrop-blur-sm px-4 py-1.5 text-xs text-blue-300 border-b border-blue-900/50">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        {syncStageLabel === 'forecast'
+                            ? 'Generating updated forecast…'
+                            : 'Syncing your latest transactions…'}
                     </div>
                 </div>
             )}

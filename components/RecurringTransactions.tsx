@@ -7,6 +7,7 @@ import { getDisplayMerchant } from "@/lib/merchants";
 import { inferCategory } from "@/lib/categories";
 import { Repeat, Pause, Play, Trash2, Calendar, DollarSign } from "lucide-react";
 import { clsx } from "clsx";
+import { SkeletonRecurringList } from "@/components/Skeleton";
 
 import type { Transaction } from "@/types";
 
@@ -23,7 +24,7 @@ interface RecurringPattern {
 }
 
 export function RecurringTransactions() {
-    const { transactions } = useSync();
+    const { transactions, loadingStage } = useSync();
     const { prefs, loaded, setPref } = usePreferences();
     const [pausedSet, setPausedSet] = useState<Set<string>>(new Set());
 
@@ -111,6 +112,10 @@ export function RecurringTransactions() {
             return next;
         });
     };
+
+    if (loadingStage === 'transactions') {
+        return <SkeletonRecurringList count={4} />;
+    }
 
     if (patterns.length === 0) {
         return (

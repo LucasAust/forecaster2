@@ -235,6 +235,24 @@ export interface MfaFactor {
     updated_at: string;
 }
 
+// ─── Transaction Clarification Types ───────────────────────
+
+export interface ClarificationQuestion {
+    transaction_id: string;
+    transaction_name: string;
+    amount: number;
+    date: string;
+    question: string;
+    options: string[];
+    /** Parallel array to options: which category each option maps to */
+    category_mappings: string[];
+}
+
+export interface ClarificationAnswer {
+    transaction_id: string;
+    category: string;
+}
+
 // ─── Sync Context Types ─────────────────────────────────────
 
 export type LoadingStage = 'idle' | 'transactions' | 'forecast' | 'complete';
@@ -250,4 +268,10 @@ export interface SyncState {
     accounts: PlaidAccount[];
     loadingStage: LoadingStage;
     error: string | null;
+    /** Questions to ask user after a fresh bank connection (up to 5) */
+    pendingClarifications: ClarificationQuestion[];
+    /** Submit user's answers, save to DB, re-run forecast */
+    submitClarifications: (answers: ClarificationAnswer[]) => Promise<void>;
+    /** Dismiss clarifications without answering */
+    dismissClarifications: () => void;
 }

@@ -116,3 +116,9 @@ body {
 :root.light ::-webkit-scrollbar-track { background: #f4f4f5; }
 :root.light ::-webkit-scrollbar-thumb { background: #d4d4d8; }
 :root.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+@keyframes slide {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}

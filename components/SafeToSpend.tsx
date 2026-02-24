@@ -4,10 +4,11 @@ import { Wallet } from "lucide-react";
 import { useSync } from "@/contexts/SyncContext";
 import { useMemo } from "react";
 import { CountUp } from "@/components/MotionWrappers";
+import { SkeletonSafeToSpend } from "@/components/Skeleton";
 import type { PredictedTransaction } from "@/types";
 
 export function SafeToSpend() {
-    const { balance, forecast } = useSync();
+    const { balance, forecast, loadingStage } = useSync();
 
     const { daily, daysLeft, totalUpcoming } = useMemo(() => {
         const now = new Date();
@@ -33,6 +34,10 @@ export function SafeToSpend() {
 
         return { daily, daysLeft, totalUpcoming };
     }, [balance, forecast]);
+
+    if (loadingStage === 'transactions' || loadingStage === 'forecast') {
+        return <SkeletonSafeToSpend />;
+    }
 
     return (
         <div className="glass-card rounded-2xl p-6">

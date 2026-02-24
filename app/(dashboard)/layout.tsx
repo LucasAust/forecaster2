@@ -7,6 +7,7 @@ import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { PreferencesProvider } from "@/contexts/PreferencesContext";
 import { AlertEngine } from "@/components/AlertEngine";
 import { NotificationBell } from "@/components/NotificationBell";
+import { TransactionClarificationModal } from "@/components/TransactionClarificationModal";
 
 export default function DashboardLayout({
     children,
@@ -20,6 +21,8 @@ export default function DashboardLayout({
             <DashboardShell>
                 <KeyboardShortcutsProvider>
                 <AlertEngine />
+                {/* Clarification modal — shown automatically after a fresh bank connection */}
+                <TransactionClarificationModal />
                 <div className="flex min-h-screen">
                     {/* Desktop sidebar — hidden on mobile */}
                     <div className="hidden md:block">

@@ -4,9 +4,10 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getDisplayMerchant } from "@/lib/merchants";
 import { useSync } from "@/contexts/SyncContext";
+import { SkeletonForecastCards } from "@/components/Skeleton";
 
 export function QuickGlance() {
-    const { forecast } = useSync();
+    const { forecast, loadingStage } = useSync();
     const [upcoming, setUpcoming] = useState<import("@/types").PredictedTransaction[]>([]);
 
     useEffect(() => {
@@ -18,7 +19,9 @@ export function QuickGlance() {
         }
     }, [forecast]);
 
-    if (!forecast) return <div className="text-sm text-zinc-500">Loading...</div>;
+    if (!forecast || loadingStage === 'transactions' || loadingStage === 'forecast') {
+        return <SkeletonForecastCards count={6} />;
+    }
 
     if (upcoming.length === 0) return (
         <div className="text-sm text-zinc-500 text-center py-4">
