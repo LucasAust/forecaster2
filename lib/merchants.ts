@@ -18,6 +18,22 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /discover\s*e-?|discover\s*payment/i, name: "Discover" },
     { pattern: /clerky/i, name: "Clerky" },
 
+    // Payroll processors — normalize to canonical name so recurring detection works
+    // regardless of the exact ACH description format
+    { pattern: /\badp\b|adp\s*(payroll|llc|tax)/i, name: "ADP Payroll" },
+    { pattern: /gusto/i, name: "Gusto Payroll" },
+    { pattern: /paychex/i, name: "Paychex Payroll" },
+    { pattern: /workday/i, name: "Workday Payroll" },
+    { pattern: /rippling/i, name: "Rippling Payroll" },
+    { pattern: /bamboohr|bamboo\s*hr/i, name: "BambooHR Payroll" },
+    { pattern: /paycom/i, name: "Paycom Payroll" },
+    { pattern: /ceridian|dayforce/i, name: "Ceridian Payroll" },
+    { pattern: /kronos|ukg\b/i, name: "UKG Payroll" },
+    { pattern: /ultipro/i, name: "UltiPro Payroll" },
+    // Generic direct deposit — normalize variations to same merchant for grouping
+    { pattern: /direct\s*dep(osit)?|dir\s*dep/i, name: "Direct Deposit" },
+    { pattern: /irs\s*treas|tax\s*refund|us\s*treasury/i, name: "IRS / Treasury" },
+
     // Telecom
     { pattern: /att\*?\s*bill|at&t|att\s+/i, name: "AT&T" },
     { pattern: /t-?mobile/i, name: "T-Mobile" },

@@ -51,8 +51,16 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 /** Keyword → category mapping. Order matters: first match wins. */
 const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
-    // Income
-    { keywords: ["payroll", "direct dep", "salary", "wage", "income", "deposit", "paycheck"], category: "Income" },
+    // Income — must be checked BEFORE Transfer to catch payroll labeled as ["Transfer","Payroll"] by Plaid
+    { keywords: [
+        "payroll", "direct dep", "direct deposit", "ach credit",
+        "salary", "wage", "income", "paycheck",
+        "adp", "gusto", "paychex", "workday", "rippling", "bamboohr", "paycom",
+        "ceridian", "kronos", "ultipro", "namely", "zenefits", "heartland payroll",
+        "intuit payroll", "quickbooks payroll",
+        "tax refund", "irs treas", "state refund", "tax return",
+        "reimbursement", "expense reimburs",
+    ], category: "Income" },
     // Transfers
     { keywords: ["transfer", "zelle", "venmo", "cashapp", "cash app", "xfer", "robinhood"], category: "Transfer" },
     // Housing

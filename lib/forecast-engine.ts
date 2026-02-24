@@ -74,13 +74,20 @@ const NOISE_MERCHANT_PATTERNS = [
     /acct\s*xfer/i,
     /acct\s*transfer/i,
     /statement\s*credit/i,
+    /interest\s*charge/i,       // interest you PAY on debt (not savings interest earned)
     /interest\s*payment/i,
     /redemption\s*credit/i,
     /statement\s*credit\s*adjust/i,
-    /interest\s*paid/i,
     /cashback.*bonus|cash.*back.*redemption/i,
     /directpay.*full.*balance/i,
     /internet\s*payment.*thank/i,
+    // CC/loan payments that appear as plain bank name with no "payment" prefix
+    /^(discover\s*e-?|discover\s*payment)/i,
+    /^apple\s*card\s*payment/i,
+    /^sofi\s*(loan|personal|payment)/i,
+    /cc\s*payment/i,
+    /card\s*payment/i,
+    /loan\s*payment/i,
 ];
 
 /**
@@ -293,26 +300,51 @@ function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
         .filter((tx) => !tx.pending)
         .filter((tx) => {
             // Check noise on RAW name BEFORE merchant cleaning
-            // (cleaning can normalize "PAYMENT TO CHASE CARD" → just "Chase")
             const rawName = (tx.merchant_name || tx.name || "");
             return !isNoiseMerchant(rawName);
         })
+        // ── Outgoing Plaid-Transfer filter ────────────────────────────────────
+        // When Plaid's top-level category is "Transfer" and the transaction is an
+        // outgoing payment (positive Plaid amount = money out = expense after flip),
+        // it's a CC payment, loan payment, or inter-bank transfer — not real spending.
+        // Filter these before mapping so they don't pollute expense patterns OR
+        // get double-counted alongside the individual charges they're paying off.
+        .filter((tx) => {
+            const plaidTop = (Array.isArray(tx.category)
+                ? tx.category[0]
+                : tx.category || '').toLowerCase().trim();
+            // tx.amount > 0 in Plaid = expense (money out). Combined with Transfer → skip.
+            return !(plaidTop === 'transfer' && tx.amount > 0);
+        })
         .map((tx) => {
-            const amount = tx.amount * -1; // Plaid→Standard: flip sign
+            const flippedAmount = tx.amount * -1; // Plaid→Standard: positive=income, negative=expense
             const rawName = tx.merchant_name || tx.name || "";
             const merchant = cleanMerchantName(rawName);
-            const category = inferCategory(tx);
+            let category = inferCategory(tx) as string;
             const date = tx.date;
             const day_of_week = parseDate(date).getDay();
-            return { date, merchant, amount, category, day_of_week };
+
+            // ── Amount-aware Transfer → Income override ────────────────────────
+            // Plaid labels payroll and direct deposits as ["Transfer", "Payroll"] or
+            // ["Transfer", "Deposit"]. After our sign flip, these are POSITIVE amounts
+            // (money coming in). Check Plaid's full category array for income signals
+            // and override so they aren't silently excluded by EXCLUDED_CATEGORIES.
+            if (category === "Transfer" && flippedAmount > 0) {
+                const allCats = (Array.isArray(tx.category)
+                    ? tx.category
+                    : [tx.category || ''])
+                    .join(' ').toLowerCase();
+                if (/payroll|direct\s*dep|deposit|income|salary|interest\s*(earn|paid|credit)|tax\s*refund|reimb/.test(allCats)) {
+                    category = "Income";
+                }
+            }
+
+            return { date, merchant, amount: roundTo(flippedAmount, 2), category, day_of_week };
         })
         .filter((tx) => !isNoiseMerchant(tx.merchant)) // also check cleaned name
         .sort((a, b) => a.date.localeCompare(b.date));
 
     // ── Deduplicate: same date + merchant + amount = cross-account duplicate ──
-    // When users connect multiple accounts at the same bank (or reconnect),
-    // Plaid returns the same transaction from each linked account.
-    // These are NOT split payments — they're exact duplicates.
     const seen = new Map<string, CleanTransaction>();
     for (const tx of cleaned) {
         const key = `${tx.date}|${tx.merchant}|${Math.round(tx.amount * 100)}`;
