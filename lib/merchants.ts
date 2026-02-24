@@ -168,7 +168,11 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
 
 /** Noise words to strip from raw merchant names */
 const NOISE_PATTERNS = [
-    /^(ach|pos|debit|credit|purchase|withdrawal|deposit|payment|online|recurring|check|chk|electronic)\s*/gi,
+    // ACH payroll / deposit prefixes that precede the actual employer/sender name
+    /^(early\s*pay\s*)?payroll\s*(ach\s*)?from\s*/gi,
+    /^ach\s*(credit|deposit|withdrawal|payment|debit)?\s*(from\s*)?/gi,
+    /^(eft|wire|direct)\s*(deposit|transfer|payment)\s*(from\s*)?/gi,
+    /^(pos|debit|credit|purchase|withdrawal|deposit|payment|online|recurring|check|chk|electronic)\s*/gi,
     /\s*(ach|pos|debit|credit|purchase|withdrawal|deposit|payment|online|recurring|check|chk|electronic)\s*$/gi,
     /\s+(inc|llc|ltd|corp|co|company|enterprises)\.?\s*$/gi,
     /\s*#\d+\s*/g,     // Store numbers like #1234

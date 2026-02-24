@@ -293,8 +293,17 @@ function seededRandom(seed: number): () => number {
     };
 }
 
-// ─── Step 1: Clean Raw Transactions ─────────────────────────
+// ── Amount-aware Transfer → Income override ──────────────────────────────
+// Catches Plaid-labeled Transfer transactions that are actually income:
+//   1. Plaid category array contains income-related subcategories
+//   2. OR the merchant/name itself contains income-related keywords
+// Both the category array AND the raw name are checked because some banks
+// just return ["Transfer"] with no subcategory (e.g., generic direct deposit).
+const INCOME_NAME_PATTERNS =
+    /payroll|direct\s*dep|\bach\s*credit\b|salary|wage|\bpay\b|interest\s*(paid|earn|credit)|tax\s*refund|irs\s*treas|reimb|bonus\s*pay|commission|tip\s*income|dividend/i;
 
+const INCOME_CATEGORY_PATTERNS =
+    /payroll|direct\s*dep|deposit|income|salary|interest\s*(earn|paid|credit)|tax\s*refund|reimb/;
 function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
     const cleaned = raw
         .filter((tx) => !tx.pending)
@@ -325,16 +334,17 @@ function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
             const day_of_week = parseDate(date).getDay();
 
             // ── Amount-aware Transfer → Income override ────────────────────────
-            // Plaid labels payroll and direct deposits as ["Transfer", "Payroll"] or
-            // ["Transfer", "Deposit"]. After our sign flip, these are POSITIVE amounts
-            // (money coming in). Check Plaid's full category array for income signals
-            // and override so they aren't silently excluded by EXCLUDED_CATEGORIES.
+            // Plaid labels payroll/deposits as ["Transfer","Payroll"] or bare ["Transfer"].
+            // Check BOTH the Plaid category array (via INCOME_CATEGORY_PATTERNS) AND the raw
+            // merchant/transaction name (via INCOME_NAME_PATTERNS) so no common income format
+            // falls through, even when Plaid provides no useful subcategory.
             if (category === "Transfer" && flippedAmount > 0) {
                 const allCats = (Array.isArray(tx.category)
                     ? tx.category
                     : [tx.category || ''])
                     .join(' ').toLowerCase();
-                if (/payroll|direct\s*dep|deposit|income|salary|interest\s*(earn|paid|credit)|tax\s*refund|reimb/.test(allCats)) {
+                const rawNameStr = (tx.merchant_name || tx.name || '').toLowerCase();
+                if (INCOME_CATEGORY_PATTERNS.test(allCats) || INCOME_NAME_PATTERNS.test(rawNameStr)) {
                     category = "Income";
                 }
             }
@@ -394,9 +404,13 @@ function mergeSplitPayments(txs: CleanTransaction[]): CleanTransaction[] {
                 (c) => Math.round(c.amount * 100) === Math.round(sorted[i].amount * 100)
             );
 
+            // Never merge income transactions — paychecks from the same employer
+            // within a biweekly window have similar amounts but are SEPARATE deposits.
+            const isIncome = cluster[0].amount > 0;
+
             // Merge if: within 10 days of last item AND total cluster span ≤ 15 days
             // AND amounts differ (to avoid summing duplicate charges)
-            if (gapFromLast <= 10 && spanFromFirst <= 15 && sameSign && !hasIdenticalAmount) {
+            if (!isIncome && gapFromLast <= 10 && spanFromFirst <= 15 && sameSign && !hasIdenticalAmount) {
                 cluster.push(sorted[i]);
             } else {
                 // Flush cluster
@@ -451,12 +465,14 @@ function detectRecurringSeries(txs: CleanTransaction[]): RecurringSeries[] {
         if (isNeverRecurring(merchant)) continue;
 
         // ── Minimum occurrence thresholds based on category ──
-        // Subscriptions/bills: 2+ occurrences is enough (Netflix, rent, etc.)
+        // Income & subscriptions/bills: 2+ occurrences is enough
+        //   (payroll with 30 days of history = only 2 biweekly deposits)
         // Sporadic categories: need 4+ to distinguish pattern from coincidence
         // Everything else: need 3+ (reasonable default)
         const primaryCategory = all[0]?.category || "Other";
         const isSub = isSubscription(merchant);
-        const minOccurrences = isSub ? 2
+        const isIncomeSeries = all.every(t => t.amount > 0);
+        const minOccurrences = (isSub || isIncomeSeries) ? 2
             : SPORADIC_CATEGORIES.has(primaryCategory) ? 4
             : 3;
 
@@ -692,6 +708,93 @@ function detectDiscretionaryPatterns(
             Math.abs(b.recent_avg_amount * b.avg_weekly_count) -
             Math.abs(a.recent_avg_amount * a.avg_weekly_count)
     );
+}
+
+// ─── Step 4b: Variable / Irregular Income Projection ────────
+
+/**
+ * Detect irregular income that doesn't fit a strict recurring cadence but still
+ * recurs (e.g. hourly/tipped workers, freelance deposits, gig-economy payouts).
+ * We look at Income transactions that were NOT captured by detectRecurringSeries,
+ * compute a statistical weekly income rate, and project it forward.
+ */
+function scheduleVariableIncome(
+    cleaned: CleanTransaction[],
+    recurringMerchants: Set<string>,
+    startDate: Date,
+    endDate: Date,
+    seed: number
+): PredictedTransaction[] {
+    // Income transactions not already covered by recurring series
+    const nonRecurringIncome = cleaned.filter(
+        (tx) => tx.amount > 0 && !recurringMerchants.has(tx.merchant)
+    );
+
+    if (nonRecurringIncome.length < 3) return [];
+
+    // Only use last 90 days to capture current income reality
+    const today = new Date();
+    const ninetyDaysAgo = formatDate(addDays(today, -90));
+    const recent = nonRecurringIncome.filter((tx) => tx.date >= ninetyDaysAgo);
+    if (recent.length < 3) return [];
+
+    const spanDays = Math.max(
+        7,
+        daysBetween(recent[0].date, recent[recent.length - 1].date)
+    );
+    const weeksOfHistory = spanDays / 7;
+
+    // Statistical summary
+    const amounts = recent.map((t) => t.amount);
+    const cleanAmounts = removeOutliers(amounts);
+    const avgAmount = median(cleanAmounts);
+    const amountSd = stdDev(cleanAmounts);
+    const weeklyCount = recent.length / weeksOfHistory;
+
+    if (avgAmount <= 0 || weeklyCount <= 0) return [];
+
+    // Group by merchant to use the most common source as the label
+    const freq = new Map<string, number>();
+    for (const tx of recent) freq.set(tx.merchant, (freq.get(tx.merchant) || 0) + 1);
+    const topMerchant = [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+    // Generate projected deposits across the forecast window
+    const results: PredictedTransaction[] = [];
+    const rng = seededRandom(seed + 777);
+
+    let cursor = new Date(startDate);
+    const forecastDays = daysBetween(formatDate(startDate), formatDate(endDate));
+    const expectedDeposits = Math.round(weeklyCount * (forecastDays / 7));
+
+    if (expectedDeposits === 0) return [];
+
+    // Spread deposits evenly then add ±jitter
+    const intervalDays = forecastDays / expectedDeposits;
+    for (let i = 0; i < expectedDeposits; i++) {
+        const baseDayOffset = i * intervalDays;
+        // ±2-day jitter to avoid perfectly mechanical spacing
+        const jitter = (rng() - 0.5) * 4;
+        const depositDay = addDays(startDate, Math.round(baseDayOffset + jitter));
+        const depositDate = formatDate(depositDay);
+
+        if (depositDate < formatDate(startDate) || depositDate > formatDate(endDate)) continue;
+
+        // Amount: avg ± fraction of std dev, clamped to sane range
+        const rawAmount = avgAmount + (rng() - 0.5) * Math.min(amountSd, avgAmount * 0.25);
+        const amount = roundTo(Math.max(1, rawAmount), 2);
+
+        results.push({
+            date: depositDate,
+            merchant: topMerchant,
+            amount: roundTo(amount, 2),
+            category: "Income",
+            day_of_week: DAY_NAMES[depositDay.getDay()],
+            type: "income",
+            confidence_score: "low",
+        });
+    }
+
+    return results;
 }
 
 // ─── Step 4: DETERMINISTIC Recurring Scheduler ──────────────
@@ -1028,8 +1131,12 @@ export function generateDeterministicForecast(
     const seed = parseInt(formatDate(today).replace(/-/g, ""), 10);
     const discretionaryTxs = scheduleDiscretionaryItems(discretionary, start, end, seed);
 
+    // Project variable/irregular income (freelance, gig, hourly) that wasn't
+    // detected as strictly recurring (different amounts or irregular cadence).
+    const variableIncomeTxs = scheduleVariableIncome(cleaned, recurringMerchants, start, end, seed);
+
     // Merge and sort
-    const all = [...recurringTxs, ...discretionaryTxs]
+    const all = [...recurringTxs, ...discretionaryTxs, ...variableIncomeTxs]
         .sort((a, b) => a.date.localeCompare(b.date));
 
     // Dedup: same merchant + date + rounded amount
