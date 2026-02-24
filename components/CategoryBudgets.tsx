@@ -15,7 +15,7 @@ interface CategoryLimit {
 }
 
 export function CategoryBudgets() {
-    const { transactions } = useSync();
+    const { transactions, loadingStage } = useSync();
     const { prefs, loaded, setPref } = usePreferences();
     const [limits, setLimits] = useState<CategoryLimit[]>([]);
     const [editingCategory, setEditingCategory] = useState<string | null>(null);
@@ -104,6 +104,25 @@ export function CategoryBudgets() {
     };
 
     const getLimit = (category: string) => limits.find(l => l.category === category);
+
+    if ((loadingStage === 'transactions' || loadingStage === 'forecast') && activeCategories.length === 0) {
+        return (
+            <div className="space-y-3 animate-pulse">
+                {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                                <div className="h-3 w-24 rounded bg-zinc-700" />
+                            </div>
+                            <div className="h-3 w-16 rounded bg-zinc-700" />
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-zinc-800" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     if (activeCategories.length === 0) {
         return <p className="text-sm text-zinc-500 text-center py-4">No spending data available this month.</p>;

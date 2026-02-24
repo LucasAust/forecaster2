@@ -19,11 +19,18 @@ export async function GET(request: Request) {
 
         if (error) {
             console.error("Error fetching plaid items:", error);
-            return NextResponse.json({ transactions: [], accounts: [] });
+            return NextResponse.json({ transactions: [], accounts: [], hasLinkedBank: false });
         }
 
         if (!items || items.length === 0) {
-            return NextResponse.json({ transactions: [], accounts: [] });
+            // No Plaid items linked — still return any manually-imported transactions from DB
+            const { data: manualTx } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false })
+                .limit(2000);
+            return NextResponse.json({ transactions: manualTx || [], accounts: [], hasLinkedBank: false });
         }
 
         const { searchParams } = new URL(request.url);
@@ -153,6 +160,18 @@ export async function GET(request: Request) {
                             .delete()
                             .eq('item_id', item.item_id)
                             .eq('user_id', user.id);
+                    } else {
+                        // Non-fatal error: still try to populate accounts_data so the UI
+                        // doesn't wrongly show "connect a bank" when a bank IS connected.
+                        try {
+                            const accountsResponse = await plaidClient.accountsGet({ access_token: item.access_token });
+                            await supabase
+                                .from('plaid_items')
+                                .update({ accounts_data: accountsResponse.data.accounts })
+                                .eq('item_id', item.item_id);
+                        } catch (acctErr) {
+                            console.error(`Could not fetch accounts for item ${item.item_id}:`, acctErr);
+                        }
                     }
                 }
             }
@@ -200,9 +219,8 @@ export async function GET(request: Request) {
             return true;
         });
 
-        return NextResponse.json({ transactions: allTransactions, accounts: allAccounts });
+        return NextResponse.json({ transactions: allTransactions, accounts: allAccounts, hasLinkedBank: items.length > 0 });
     } catch (error) {
         console.error('Error fetching transactions:', error);
         return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
-    }
-}
+    }}

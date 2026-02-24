@@ -20,6 +20,8 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
 interface TransactionsResponse {
     transactions: Transaction[];
     accounts: PlaidAccount[];
+    /** True when the user has at least one Plaid item linked, even with no transactions yet */
+    hasLinkedBank?: boolean;
 }
 
 export async function fetchTransactions(force = false): Promise<TransactionsResponse> {

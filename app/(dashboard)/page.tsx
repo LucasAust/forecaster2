@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { BalanceChart } from "@/components/BalanceChart";
 import { QuickGlance } from "@/components/QuickGlance";
 import { RecentTransactions } from "@/components/RecentTransactions";
-import { Search, Sparkles, Loader2 } from "lucide-react";
+import { Search, Sparkles, Loader2, AlertTriangle } from "lucide-react";
 import { useSync } from "@/contexts/SyncContext";
 import { AISuggestions } from "@/components/AISuggestions";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -31,7 +31,7 @@ export default function Home() {
 }
 
 function DashboardContent() {
-  const { loadingStage, transactions, forecast, balance, isSyncing, syncProgress } = useSync();
+  const { loadingStage, transactions, forecast, balance, isSyncing, syncProgress, forecastError } = useSync();
   const { isVisible } = useDashboardLayout();
   const [forecastDays, setForecastDays] = useState(30);
   const [displayName, setDisplayName] = useState("User");
@@ -133,6 +133,14 @@ function DashboardContent() {
           </div>
         </div>
       </div>
+
+      {/* Forecast error — non-blocking warning when AI model failed but data is present */}
+      {forecastError && !forecast && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
+          <p className="text-amber-300">{forecastError}</p>
+        </div>
+      )}
 
       {/* AI Input Section */}
       <div className="relative">

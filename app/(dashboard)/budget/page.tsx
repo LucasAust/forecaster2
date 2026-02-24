@@ -124,13 +124,8 @@ export default function BudgetPage() {
     }, [transactions, forecast]);
 
     const handleSaveTarget = async () => {
-        console.log("Saving target...", tempTarget);
         const newTarget = parseFloat(tempTarget);
-
-        if (isNaN(newTarget)) {
-            console.error("Invalid target number");
-            return;
-        }
+        if (isNaN(newTarget) || newTarget < 0) return;
 
         try {
             const response = await authFetch('/api/settings', {
@@ -140,14 +135,11 @@ export default function BudgetPage() {
             });
 
             if (response.ok) {
-                console.log("Save successful");
                 setMonthlyTarget(newTarget);
                 setIsEditingTarget(false);
-            } else {
-                console.error("Failed to save budget", await response.json());
             }
-        } catch (error) {
-            console.error("Error saving budget:", error);
+        } catch {
+            // non-critical — target remains at previous value
         }
     };
 

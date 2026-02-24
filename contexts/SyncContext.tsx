@@ -60,6 +60,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
     const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
     const [error, setError] = useState<string | null>(null);
+    const [forecastError, setForecastError] = useState<string | null>(null);
+    const [hasLinkedBank, setHasLinkedBank] = useState(false);
     const [pendingClarifications, setPendingClarifications] = useState<ClarificationQuestion[]>([]);
 
     const isSyncingRef = useRef(false);
@@ -100,8 +102,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             if (data.transactions && data.transactions.length > 0) {
                 setTransactions(data.transactions);
                 if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
+                if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
                 const fc = await callForecastAPI(data.transactions, true);
-                if (fc) { setForecast(fc); setLoadingStage('complete'); setLastUpdated(new Date()); }
+                if (fc) { setForecast(fc); setForecastError(null); setLoadingStage('complete'); setLastUpdated(new Date()); }
+                else setForecastError('Forecast model could not generate predictions. Showing latest data.');
             }
         } catch (e) { console.error('submitClarifications failed:', e); }
     }, []);
@@ -121,14 +125,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 if (data.transactions && data.transactions.length > 0) {
                     setTransactions(data.transactions);
                     if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
+                    if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
                     const fc = await callForecastAPI(data.transactions, true);
                     if (fc) {
-                        setForecast(fc); setLoadingStage('complete'); setLastUpdated(new Date());
+                        setForecast(fc); setForecastError(null); setLoadingStage('complete'); setLastUpdated(new Date());
                         fetchClarificationsInBackground(data.transactions);
                         authFetch('/api/suggestions', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ history: data.transactions, forecast: fc }),
                         }).catch(console.error);
+                    } else {
+                        setForecastError('Forecast model could not generate predictions. Showing latest data.');
                     }
                     // stop poll — done
                 } else {
@@ -153,7 +160,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
         const maxRetries = options?.retryOnEmpty ? 12 : 0;
         let attempt = 0;
-        let data: { transactions: Transaction[]; accounts: PlaidAccount[] } = { transactions: [], accounts: [] };
+        let data: { transactions: Transaction[]; accounts: PlaidAccount[]; hasLinkedBank?: boolean } = { transactions: [], accounts: [] };
 
         try {
             while (attempt <= maxRetries) {
@@ -168,6 +175,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
             setTransactions(data.transactions || []);
             if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
+            if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
             setSyncProgress(50);
 
             if (data.transactions && data.transactions.length > 0) {
@@ -175,11 +183,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 const fc = await callForecastAPI(data.transactions, true);
                 if (fc) {
                     setForecast(fc);
+                    setForecastError(null);
                     authFetch('/api/suggestions', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ history: data.transactions, forecast: fc }),
                     }).catch(console.error);
                     if (options?.retryOnEmpty) fetchClarificationsInBackground(data.transactions);
+                } else {
+                    setForecastError('Forecast model could not generate predictions. Showing latest transactions.');
                 }
             } else if (options?.retryOnEmpty) {
                 // Plaid not ready after 60s of retries — poll silently in background
@@ -223,10 +234,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 const data = await fetchTransactions();
                 setTransactions(data.transactions || []);
                 if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
+                if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
                 if (data.transactions && data.transactions.length > 0) {
                     setLoadingStage('forecast');
                     const fc = await callForecastAPI(data.transactions, false);
-                    if (fc) setForecast(fc);
+                    if (fc) { setForecast(fc); setForecastError(null); }
+                    else setForecastError('Forecast model could not generate predictions. Showing latest transactions.');
                 }
                 setLoadingStage('complete');
                 setLastUpdated(new Date());
@@ -246,7 +259,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     return (
         <SyncContext.Provider value={{
             isSyncing, syncProgress, lastUpdated, triggerUpdate,
-            transactions, forecast, balance, accounts, loadingStage, error,
+            transactions, forecast, balance, accounts, loadingStage, error, forecastError, hasLinkedBank,
             pendingClarifications, submitClarifications, dismissClarifications,
         }}>
             {children}

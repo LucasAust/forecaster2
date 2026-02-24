@@ -22,7 +22,7 @@ const navItems = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
-  const { triggerUpdate, isSyncing, syncProgress, balance, accounts, error, loadingStage, transactions, lastUpdated } = useSync();
+  const { triggerUpdate, isSyncing, syncProgress, balance, accounts, error, loadingStage, transactions, lastUpdated, hasLinkedBank } = useSync();
   const [collapsed, setCollapsed] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
 
@@ -65,12 +65,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     transactions: hasNewTransactions,
   };
 
-  // Onboarding mode: Data loaded but no transactions AND no accounts connected
-  // Check accounts.length instead of balance === 0 to avoid false positive
-  // for users who genuinely have $0 across linked accounts.
+  // Onboarding mode: Data loaded, no transactions/accounts, AND no Plaid item linked.
+  // Using hasLinkedBank prevents false-positive when bank IS connected but Plaid
+  // hasn't returned transactions/accounts yet (first-sync latency or transient error).
   const isOnboarding = loadingStage === 'complete' &&
     (!transactions || transactions.length === 0) &&
-    accounts.length === 0;
+    accounts.length === 0 &&
+    !hasLinkedBank;
 
   return (
     // Removed "transition-transform" to ensure fixed overlay works correctly relative to viewport

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { CATEGORY_COLORS, inferCategory } from "@/lib/categories";
+import { useSync } from "@/contexts/SyncContext";
 
 import type { Transaction } from "@/types";
 
@@ -64,6 +65,8 @@ function ProgressRing({ label, spent, budget, color }: { label: string; spent: n
 }
 
 export function CategoryProgressRings({ transactions, monthlyTarget }: Props) {
+    const { loadingStage } = useSync();
+
     const categoryData = useMemo(() => {
         const totals: Record<string, number> = {};
 
@@ -87,6 +90,20 @@ export function CategoryProgressRings({ transactions, monthlyTarget }: Props) {
                 color: CATEGORY_COLORS[cat] || "#71717a",
             }));
     }, [transactions, monthlyTarget]);
+
+    if ((loadingStage === 'transactions' || loadingStage === 'forecast') && categoryData.length === 0) {
+        return (
+            <div className="flex flex-wrap justify-center gap-6 animate-pulse">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="flex flex-col items-center gap-2 min-w-[100px]">
+                        <div className="h-[90px] w-[90px] rounded-full bg-zinc-800/60" />
+                        <div className="h-2.5 w-16 rounded bg-zinc-800/60" />
+                        <div className="h-2 w-10 rounded bg-zinc-800/50" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     if (categoryData.length === 0) {
         return <p className="text-sm text-zinc-500 text-center py-8">No category data yet.</p>;
