@@ -83,8 +83,13 @@ const NOISE_MERCHANT_PATTERNS = [
     /internet\s*payment.*thank/i,
 ];
 
-/** Categories that should never appear in forecasts */
-const EXCLUDED_CATEGORIES = new Set(["Transfer", "Income"]);
+/**
+ * Categories excluded from BOTH recurring and discretionary detection.
+ * Income is intentionally NOT excluded here — payroll / direct deposits are
+ * the most predictable recurring transactions and must appear in forecasts.
+ * Discretionary detection already excludes income naturally via `tx.amount < 0`.
+ */
+const EXCLUDED_CATEGORIES = new Set(["Transfer"]);
 
 /**
  * Categories where spending is inherently sporadic / event-driven.
@@ -126,12 +131,30 @@ function isNeverRecurring(merchant: string): boolean {
 
 /** Merchants that are SaaS/subscriptions (post on exact date, not ACH weekend-shifted) */
 const SUBSCRIPTION_PATTERNS = [
+    // Dev / Cloud infrastructure
     /digitalocean/i, /supabase/i, /github/i, /google.*cloud/i,
-    /codetwo/i, /playstation/i, /netflix/i, /spotify/i,
-    /hulu/i, /disney/i, /hbo/i, /apple.*music/i, /youtube/i,
-    /amazon.*prime/i, /anthropic/i, /openai/i, /adobe/i,
-    /railway/i, /render/i, /vercel/i, /aws/i, /li\s*drum/i,
-    /microsoft/i, /creem/i, /help\.?max/i,
+    /codetwo/i, /railway/i, /render/i, /vercel/i, /aws/i,
+    /li\s*drum/i, /creem/i, /heroku/i, /netlify/i, /cloudflare/i,
+    /datadog/i, /sentry\.io/i, /linear\.app/i, /planetscale/i,
+    // AI / Productivity SaaS
+    /anthropic/i, /openai/i, /microsoft/i, /adobe/i,
+    /dropbox/i, /notion/i, /figma/i, /canva/i, /1password/i,
+    /lastpass/i, /bitwarden/i, /todoist/i, /evernote/i,
+    // Streaming / Media
+    /netflix/i, /spotify/i, /hulu/i, /disney/i, /hbo/i, /help\.?max/i,
+    /apple.*music/i, /youtube/i, /amazon.*prime/i, /audible/i,
+    /peacock.*tv|peacocktv/i, /paramount\+|paramount.*plus/i,
+    /apple.*tv\+?/i, /discovery\+/i, /fubo/i, /sling/i, /philo/i,
+    /tidal/i, /deezer/i, /pandora/i, /iheart/i,
+    // iCloud / Apple services
+    /icloud/i, /apple.*one/i,
+    // Gaming subscriptions
+    /playstation|\bpsn\b/i, /nintendo.*online/i, /xbox.*game.*pass/i,
+    /steam/i, /twitch\s*(sub|prime)/i, /discord.*nitro/i,
+    // Food delivery passes
+    /dashpass/i, /grubhub\+/i, /instacart.*express/i,
+    // VPN services (recurring monthly)
+    /nordvpn/i, /expressvpn/i, /surfshark/i, /protonvpn/i,
 ];
 
 function isNoiseMerchant(merchant: string): boolean {
@@ -445,6 +468,14 @@ function detectRecurringSeries(txs: CleanTransaction[]): RecurringSeries[] {
 
             const consistency = med > 0 ? Math.max(0, 1 - gapSD / med) : 0;
 
+            // ── Recency factor: confidence decays as the series approaches its staleness boundary ──
+            // A series last seen 2 periods ago is less reliable than one seen last week,
+            // even if its historical gap consistency was perfect.
+            const daysSinceLast = daysBetween(sorted[sorted.length - 1].date, formatDate(new Date()));
+            const cadenceLen = cadence === "weekly" ? 7 : cadence === "biweekly" ? 14 : cadence === "monthly" ? 30 : 90;
+            const maxStaleDays = cadenceLen * 2.5;
+            const freshness = Math.max(0, Math.min(1, 1 - daysSinceLast / maxStaleDays));
+
             // ── Amount analysis (outlier-resistant) ──
             const rawAmounts = sorted.map((t) => t.amount);
             const amounts = removeOutliers(rawAmounts);
@@ -495,9 +526,13 @@ function detectRecurringSeries(txs: CleanTransaction[]): RecurringSeries[] {
                 is_subscription: isSubscription(merchant),
                 last_occurrence: lastTx.date,
                 count: sorted.length,
-                confidence:
-                    consistency > 0.75 ? "high" :
-                    consistency > 0.5 ? "medium" : "low",
+                // Composite confidence: 70% gap consistency + 30% recency.
+                // A very stale series (near staleness threshold) gets demoted to "low"
+                // even if its historical timing was perfectly consistent.
+                confidence: (() => {
+                    const composite = consistency * 0.7 + freshness * 0.3;
+                    return composite > 0.65 ? "high" : composite > 0.4 ? "medium" : "low";
+                })() as "high" | "medium" | "low",
             });
         }
     }
@@ -569,8 +604,18 @@ function detectDiscretionaryPatterns(
         // Travel is event-driven (flights, hotels) — never project as discretionary pattern
         if (category === "Travel") continue;
 
-        // Count recent transactions for frequency (last 6 months)
-        const recentCatTxs = catTxs.filter((tx) => tx.date >= sixMonthsAgo);
+        // Count recent transactions for frequency (last 6 months).
+        // Apply the same holiday exclusion that was used for recentWeeks so the
+        // numerator and denominator are derived from the same date range — otherwise
+        // Nov/Dec transactions inflate the rate against a shorter-span denominator.
+        const recentCatTxs = catTxs.filter((tx) => {
+            if (tx.date < sixMonthsAgo) return false;
+            if (nonHolidayRecent.length >= 10) {
+                const month = parseInt(tx.date.substring(5, 7), 10);
+                return month !== 11 && month !== 12;
+            }
+            return true;
+        });
         const weeklyCount = recentCatTxs.length > 0
             ? recentCatTxs.length / recentWeeks
             : catTxs.length / Math.max(1, daysBetween(catTxs[0].date, catTxs[catTxs.length - 1].date) / 7);
@@ -629,8 +674,11 @@ function scheduleRecurringItems(
     const endStr = formatDate(endDate);
 
     for (const s of series) {
-        // For fixed amounts, use exact recent. For variable, use recent weighted avg.
-        const baseAbs = Math.abs(s.amount_is_fixed ? s.recent_amount : s.recent_amount);
+        // For fixed amounts (e.g. Netflix $15.49), use the median — it's the most stable
+        // representative value and ignores the influence of any single outlier occurrence.
+        // For variable amounts (e.g. utility bills), use weighted-recent — it reflects the
+        // current trend which is the most predictive of near-future amounts.
+        const baseAbs = Math.abs(s.amount_is_fixed ? s.typical_amount : s.recent_amount);
         const sign = s.type === "expense" ? -1 : 1;
 
         // Compute all occurrence dates within window
@@ -642,8 +690,14 @@ function scheduleRecurringItems(
 
             let absAmount = baseAbs;
             if (!s.amount_is_fixed && s.amount_trend !== 0) {
-                // Trend: on absolute values, positive trend = getting more expensive
-                const monthsOut = i / (s.cadence === "weekly" ? 4 : s.cadence === "biweekly" ? 2 : 1);
+                // Trend: on absolute values, positive trend = getting more expensive.
+                // monthsOut must reflect actual calendar months between occurrences:
+                //   weekly → 0.25 months/occurrence, biweekly → 0.5, monthly → 1, quarterly → 3
+                const monthsOut = i * (
+                    s.cadence === "weekly"    ? 0.25 :
+                    s.cadence === "biweekly"  ? 0.5  :
+                    s.cadence === "quarterly" ? 3    : 1
+                );
                 // Cap trend influence to ±30% max
                 const trendAdj = 1 + Math.max(-0.3, Math.min(0.3, s.amount_trend * monthsOut * 0.1));
                 absAmount = absAmount * trendAdj;
@@ -693,7 +747,11 @@ function computeOccurrences(
         }
     } else if (s.cadence === "monthly") {
         const d = new Date(lastOccurrence);
-        for (let m = 1; m <= 4; m++) {
+        // Needs up to 6 iterations: worst case is last_occurrence at the 75-day staleness
+        // boundary (2.5× monthly cadence), where months 1–2 fall in the past and months 3–5
+        // are within the 90-day forecast window. The old cap of 4 caused month-5 to be
+        // silently dropped from every forecast in this scenario.
+        for (let m = 1; m <= 6; m++) {
             const next = new Date(d.getFullYear(), d.getMonth() + m, 1);
             const daysInMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
             const day = Math.min(s.anchor_day, daysInMonth);
@@ -705,7 +763,11 @@ function computeOccurrences(
         }
     } else if (s.cadence === "quarterly") {
         const d = new Date(lastOccurrence);
-        for (let q = 1; q <= 2; q++) {
+        // Needs up to 4 iterations: worst case is last_occurrence at the 225-day staleness
+        // boundary (2.5× quarterly cadence), where q=1 (+90d) and q=2 (+180d) are in the past
+        // and q=3 (+270d) is the first occurrence within the forecast window. The old cap of
+        // 2 caused this quarterly charge to disappear entirely from the forecast.
+        for (let q = 1; q <= 4; q++) {
             const next = new Date(d.getFullYear(), d.getMonth() + (q * 3), 1);
             const daysInMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
             const day = Math.min(s.anchor_day, daysInMonth);
