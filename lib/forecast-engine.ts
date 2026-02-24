@@ -320,8 +320,8 @@ function cleanTransactions(raw: Transaction[]): CleanTransaction[] {
         // get double-counted alongside the individual charges they're paying off.
         .filter((tx) => {
             const plaidTop = (Array.isArray(tx.category)
-                ? tx.category[0]
-                : tx.category || '').toLowerCase().trim();
+                ? (tx.category[0] ?? '')
+                : tx.category ?? '').toLowerCase().trim();
             // tx.amount > 0 in Plaid = expense (money out). Combined with Transfer → skip.
             return !(plaidTop === 'transfer' && tx.amount > 0);
         })
@@ -725,9 +725,13 @@ function scheduleVariableIncome(
     endDate: Date,
     seed: number
 ): PredictedTransaction[] {
-    // Income transactions not already covered by recurring series
+    // Income transactions not already covered by recurring series.
+    // Exclude Transfer-category transactions to prevent internal account
+    // movements (savings↔checking, Zelle, etc.) from being projected as income.
     const nonRecurringIncome = cleaned.filter(
-        (tx) => tx.amount > 0 && !recurringMerchants.has(tx.merchant)
+        (tx) => tx.amount > 0
+            && !recurringMerchants.has(tx.merchant)
+            && !EXCLUDED_CATEGORIES.has(tx.category)
     );
 
     if (nonRecurringIncome.length < 3) return [];
