@@ -8,7 +8,7 @@ import { twMerge } from "tailwind-merge";
 import { PlaidLink } from "./PlaidLink";
 import { useSync } from "@/contexts/SyncContext";
 import { RefreshCw, LogOut } from "lucide-react";
-import { signout } from "@/app/login/actions";
+import { createClient } from "@/utils/supabase/client";
 import { useState, useEffect, useMemo } from "react";
 
 const navItems = [
@@ -25,6 +25,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { triggerUpdate, isSyncing, syncProgress, balance, accounts, error, loadingStage, transactions, lastUpdated, hasLinkedBank } = useSync();
   const [collapsed, setCollapsed] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } finally {
+      window.location.href = '/login';
+    }
+  };
 
   // Load collapsed state from localStorage
   useEffect(() => {
@@ -68,7 +77,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   // Onboarding mode: Data loaded, no transactions/accounts, AND no Plaid item linked.
   // Using hasLinkedBank prevents false-positive when bank IS connected but Plaid
   // hasn't returned transactions/accounts yet (first-sync latency or transient error).
+  // Also skip during active syncs so in-progress polls don't flicker the overlay.
   const isOnboarding = loadingStage === 'complete' &&
+    !isSyncing &&
     (!transactions || transactions.length === 0) &&
     accounts.length === 0 &&
     !hasLinkedBank;
@@ -244,19 +255,18 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               <p className="text-xs text-rose-500 text-center px-2">{error}</p>
             )}
 
-            <form action={signout}>
-              <button
-                type="submit"
-                title={collapsed ? "Sign Out" : undefined}
-                className={clsx(
-                  "w-full rounded-xl border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all flex items-center justify-center gap-2",
-                  collapsed ? "px-2 py-2" : "px-4 py-2"
-                )}
-              >
-                <LogOut className="h-4 w-4" />
-                {!collapsed && "Sign Out"}
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              title={collapsed ? "Sign Out" : undefined}
+              className={clsx(
+                "w-full rounded-xl border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all flex items-center justify-center gap-2",
+                collapsed ? "px-2 py-2" : "px-4 py-2"
+              )}
+            >
+              <LogOut className="h-4 w-4" />
+              {!collapsed && "Sign Out"}
+            </button>
           </div>
         </div>
       </div>
