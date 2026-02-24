@@ -210,6 +210,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             setIsSyncing(false);
             setTimeout(() => setSyncProgress(0), 2000);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchClarificationsInBackground, startBackgroundPoll]);
 
     // ── Flush queued bank-connect update ─────────────────────

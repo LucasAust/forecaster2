@@ -131,10 +131,16 @@ export async function GET(request: Request) {
 
                     if (upsertError) {
                         console.error("Error upserting transactions:", upsertError);
+                        // Don't advance the cursor — we'll retry these transactions next sync.
+                        // Still accumulate in-memory so the forecast can run this request.
+                        allTransactions = [...allTransactions, ...transactionsToUpsert];
+                        allAccounts = [...allAccounts, ...(newAccounts as unknown as Record<string, unknown>[])];
+                        continue;
                     }
                 }
 
                 // Update last_synced_at, accounts_data, and sync cursor
+                // Only reached when upsert succeeded (or there were no new transactions).
                 await supabase
                     .from('plaid_items')
                     .update({
@@ -177,7 +183,7 @@ export async function GET(request: Request) {
             }
         }
 
-        // Finally, fetch ALL up-to-date transactions and accounts from DB/Supabase to return unified view
+        // Fetch final accounts from DB (includes items we just updated)
         const { data: finalItems, error: itemsError } = await supabase
             .from('plaid_items')
             .select('accounts_data')
@@ -185,19 +191,20 @@ export async function GET(request: Request) {
 
         if (itemsError) console.error("Error fetching final items:", itemsError);
 
-        allAccounts = finalItems?.flatMap(i => i.accounts_data || []) || [];
+        // Merge DB accounts with any in-memory accounts (from failed-upsert items)
+        const dbAccounts: Record<string, unknown>[] = finalItems?.flatMap(i => i.accounts_data || []) || [];
+        const mergedAccounts = [...dbAccounts, ...allAccounts];
 
-        // Deduplicate accounts: same account can appear from multiple plaid items
-        // (e.g., user reconnected the same bank). Dedup by account_id.
+        // Deduplicate accounts by account_id
         const acctSeen = new Set<string>();
-        allAccounts = allAccounts.filter((acct: Record<string, unknown>) => {
+        const dedupedAccounts = mergedAccounts.filter((acct: Record<string, unknown>) => {
             const id = acct.account_id as string;
             if (!id || acctSeen.has(id)) return false;
             acctSeen.add(id);
             return true;
         });
 
-        const { data: finalTransactions, error: txError } = await supabase
+        const { data: dbTransactions, error: txError } = await supabase
             .from('transactions')
             .select('*')
             .eq('user_id', user.id)
@@ -206,18 +213,37 @@ export async function GET(request: Request) {
 
         if (txError) console.error("Error fetching final transactions:", txError);
 
-        allTransactions = finalTransactions || [];
+        // If DB is empty but we have in-memory transactions (stale cursor scenario),
+        // reset all cursors and trigger a one-time full re-sync from Plaid history.
+        if ((!dbTransactions || dbTransactions.length === 0) && allTransactions.length === 0 && force && items.length > 0) {
+            console.warn('DB has no transactions and in-memory is empty — resetting sync cursors for full re-sync');
+            await supabase
+                .from('plaid_items')
+                .update({ sync_cursor: null })
+                .eq('user_id', user.id);
+            // Signal to the client to retry; they'll get data on the next request
+        }
 
-        // Deduplicate: when users connect checking + savings at the same bank,
-        // or reconnect the same account, Plaid returns the same transaction from
-        // each linked item. Dedupe by (date, name, amount) keeping the first.
-        const txSeen = new Set<string>();
-        allTransactions = allTransactions.filter((tx: Record<string, unknown>) => {
+        // Merge DB rows with in-memory fallback rows (in-memory only present when upsert failed)
+        const combinedTx = [...(dbTransactions || []), ...allTransactions];
+
+        // Deduplicate by transaction_id first, then by (date|name|amount) for cross-item dupes
+        const txIdSeen = new Set<string>();
+        const txKeySeen = new Set<string>();
+        const dedupedTx = combinedTx.filter((tx: Record<string, unknown>) => {
+            const id = tx.transaction_id as string;
+            if (id) {
+                if (txIdSeen.has(id)) return false;
+                txIdSeen.add(id);
+            }
             const key = `${tx.date}|${tx.name}|${Math.round((tx.amount as number) * 100)}`;
-            if (txSeen.has(key)) return false;
-            txSeen.add(key);
+            if (txKeySeen.has(key)) return false;
+            txKeySeen.add(key);
             return true;
         });
+
+        allAccounts = dedupedAccounts;
+        allTransactions = dedupedTx;
 
         return NextResponse.json({ transactions: allTransactions, accounts: allAccounts, hasLinkedBank: items.length > 0 });
     } catch (error) {
