@@ -70,8 +70,10 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
     { pattern: /railway/i, name: "Railway" },
     { pattern: /aws|amazon\s*web/i, name: "AWS" },
 
-    // Rent / Housing
-    { pattern: /\bbilt\b/i, name: "Bilt (Rent)" },
+    // Rent / Housing — normalize BILT and legacy Yardi to same merchant "Rent"
+    // so recurring detector groups them into one series and ghost old-rent projections don't appear
+    { pattern: /\bbilt\b/i, name: "Rent" },
+    { pattern: /yardi/i, name: "Yardi" }, // separate name keeps BILT series clean; Yardi is stale-filtered (last pay ~18mo ago)
 
     // Utilities
     { pattern: /dominion\s*energy|dominion\s*va/i, name: "Dominion Energy" },
@@ -161,6 +163,7 @@ const MERCHANT_MAP: { pattern: RegExp; name: string }[] = [
 
     // Transfers / P2P
     { pattern: /zelle/i, name: "Zelle" },
+    { pattern: /venmo.*cashout/i, name: "Venmo Income" }, // cash-out from Venmo balance = real income
     { pattern: /venmo/i, name: "Venmo" },
     { pattern: /cash\s*app/i, name: "Cash App" },
     { pattern: /robinhood/i, name: "Robinhood" },

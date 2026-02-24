@@ -62,11 +62,15 @@ export default function BudgetPage() {
 
         // 1. Actual Spent (Current Month Only)
         // Actuals are Plaid-style (Expense = Positive).
+        // Exclude Transfer-category transactions (CC payments, loan payments, savings
+        // transfers) — these double-count spending that already appears as individual charges.
         const currentMonthTx = transactions ? transactions.filter((tx) => {
             const date = new Date(tx.date);
-            return date.getMonth() === currentMonth &&
-                date.getFullYear() === currentYear &&
-                tx.amount > 0; // Filter for Expenses (Positive)
+            const isCurrentMonth = date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+            const isExpense = tx.amount > 0;
+            const category = inferCategory(tx);
+            const isTransfer = category === "Transfer";
+            return isCurrentMonth && isExpense && !isTransfer;
         }).map((tx) => ({
             ...tx,
             amount: tx.amount, // Already Positive, Keep As Is
@@ -79,11 +83,13 @@ export default function BudgetPage() {
 
         // 2. Forecast Transactions (Current Month)
         // Forecast is Standard-style (Expense = Negative).
+        // Also exclude Transfer-category predictions (shouldn't be generated, but defensive).
         const predictedTx = (forecast?.predicted_transactions || []).filter((tx) => {
             const date = new Date(tx.date);
-            return date.getMonth() === currentMonth &&
-                date.getFullYear() === currentYear &&
-                (tx.amount < 0 || tx.type === 'expense');
+            const isCurrentMonth = date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+            const isExpense = tx.amount < 0 || tx.type === 'expense';
+            const isTransfer = inferCategory(tx) === "Transfer";
+            return isCurrentMonth && isExpense && !isTransfer;
         }).map((tx) => ({
             ...tx,
             amount: Math.abs(tx.amount), // Normalize to Positive

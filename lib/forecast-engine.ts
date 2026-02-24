@@ -300,7 +300,7 @@ function seededRandom(seed: number): () => number {
 // Both the category array AND the raw name are checked because some banks
 // just return ["Transfer"] with no subcategory (e.g., generic direct deposit).
 const INCOME_NAME_PATTERNS =
-    /payroll|direct\s*dep|\bach\s*credit\b|salary|wage|\bpay\b|interest\s*(paid|earn|credit)|tax\s*refund|irs\s*treas|reimb|bonus\s*pay|commission|tip\s*income|dividend/i;
+    /payroll|direct\s*dep|\bach\s*credit\b|salary|wage|\bpay\b|interest\s*(paid|earn|credit)|tax\s*refund|irs\s*treas|reimb|bonus\s*pay|commission|tip\s*income|dividend|venmo\s*cashout/i;
 
 const INCOME_CATEGORY_PATTERNS =
     /payroll|direct\s*dep|deposit|income|salary|interest\s*(earn|paid|credit)|tax\s*refund|reimb/;
@@ -610,12 +610,30 @@ function detectDiscretionaryPatterns(
     txs: CleanTransaction[],
     recurringMerchants: Set<string>
 ): DiscretionaryPattern[] {
-    // Exclude recurring merchants, transfers, income, noise, and never-recurring merchants
+    // ── Seasonal awareness (computed early, shared throughout) ──
+    // Use last 6 months EXCLUDING major holiday months (Nov-Dec) for frequency.
+    // Holiday spending distorts projections into spring/summer.
+    const today = new Date();
+    const sixMonthsAgo = formatDate(addDays(today, -180));
+
+    // Build set of recently-active merchants (seen in last 6 months).
+    // Merchants inactive longer than 6 months are treated as lapsed/cancelled
+    // and excluded from projections to prevent ghost expense projections
+    // (e.g. old rent platforms, cancelled subscriptions).
+    const recentlyActiveMerchants = new Set(
+        txs
+            .filter((tx) => tx.date >= sixMonthsAgo && tx.amount < 0)
+            .map((tx) => tx.merchant)
+    );
+
+    // Exclude recurring merchants, transfers, income, noise, and never-recurring merchants.
+    // Also exclude merchants not seen in the last 6 months (lapsed vendors).
     const disc = txs.filter(
         (tx) =>
             !recurringMerchants.has(tx.merchant) &&
             !EXCLUDED_CATEGORIES.has(tx.category) &&
             !isNeverRecurring(tx.merchant) &&
+            recentlyActiveMerchants.has(tx.merchant) &&
             tx.amount < 0
     );
 
@@ -626,12 +644,6 @@ function detectDiscretionaryPatterns(
     }
 
     const patterns: DiscretionaryPattern[] = [];
-
-    // ── Seasonal awareness ──
-    // Use last 6 months EXCLUDING major holiday months (Nov-Dec) for frequency.
-    // Holiday spending distorts projections into spring/summer.
-    const today = new Date();
-    const sixMonthsAgo = formatDate(addDays(today, -180));
 
     // Non-holiday recent transactions (exclude Nov & Dec for frequency calc)
     const recentTxs = txs.filter((tx) => tx.date >= sixMonthsAgo);
@@ -677,9 +689,12 @@ function detectDiscretionaryPatterns(
             ? dayWeights.map((w) => roundTo(w / dayTotal, 3))
             : new Array(7).fill(1 / 7);
 
-        // Merchant frequency
+        // Merchant frequency — only use last 6 months so stale/cancelled merchants
+        // (e.g. old rent platforms, cancelled subscriptions) don't contaminate projections
+        const recentCatTxs6mo = catTxs.filter((tx) => tx.date >= sixMonthsAgo);
+        const merchantSource = recentCatTxs6mo.length > 0 ? recentCatTxs6mo : catTxs;
         const freq = new Map<string, number>();
-        for (const tx of catTxs)
+        for (const tx of merchantSource)
             freq.set(tx.merchant, (freq.get(tx.merchant) || 0) + 1);
         const topMerchants = [...freq.entries()]
             .sort((a, b) => b[1] - a[1])

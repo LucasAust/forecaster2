@@ -52,6 +52,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
 /** Keyword → category mapping. Order matters: first match wins. */
 const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
     // Income — must be checked BEFORE Transfer to catch payroll labeled as ["Transfer","Payroll"] by Plaid
+    // and Venmo cashouts which contain "venmo" but are actually money flowing INTO the account.
     { keywords: [
         "payroll", "direct dep", "direct deposit", "ach credit",
         "salary", "wage", "income", "paycheck",
@@ -60,15 +61,25 @@ const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
         "intuit payroll", "quickbooks payroll",
         "tax refund", "irs treas", "state refund", "tax return",
         "reimbursement", "expense reimburs",
+        "venmo cashout", // Venmo balance cash-out = money coming in (must be before Transfer rule which matches "venmo")
     ], category: "Income" },
-    // Transfers
-    { keywords: ["transfer", "zelle", "venmo", "cashapp", "cash app", "xfer", "robinhood"], category: "Transfer" },
+    // Transfers & Debt Payments — credit card payments, loan payments, inter-bank ACH.
+    // These must be classified as Transfer so the budget page and forecast engine
+    // both exclude them from spending (otherwise CC payments double-count real spend).
+    { keywords: [
+        "transfer", "zelle", "venmo", "cashapp", "cash app", "xfer", "robinhood",
+        // Credit card electronic payments (Discover, Apple Card, generic)
+        "e-payment", "directpay", "gsbank payment", "achpayment",
+        // Debt / loan payments identified by the servicer name in ACH descriptions
+        "dept education", "student ln", "student loan", "loan payment",
+        "sofi achpayment", "arc predict",
+        // Bank account verification micro-deposits (noise, never real spending)
+        "axos bank", "acctverify",
+    ], category: "Transfer" },
     // Housing
-    { keywords: ["rent", "mortgage", "hoa", "property tax", "landlord", "apartment", "real estate", "bilt"], category: "Housing" },
+    { keywords: ["rent", "mortgage", "hoa", "property tax", "landlord", "apartment", "real estate", "bilt", "yardi"], category: "Housing" },
     // Auto / Transport (note: "uber" and "subway" removed — they match Food & Drink brands first)
     { keywords: ["mazda", "ford motor", "auto loan", "car payment", "car loan", "auto pay"], category: "Auto" },
-    // Student Loans (must come before generic "student" matches in Shopping/Education)
-    { keywords: ["dept education", "student ln", "student loan"], category: "Education" },
     // Dev Tools / SaaS (must come before Subscriptions to win)
     { keywords: ["digitalocean", "digital ocean", "supabase", "github", "google cloud", "gcp", "codetwo", "code two", "render.com", "vercel", "railway", "aws ", "amazon web", "heroku", "netlify", "anthropic", "openai", "li drum bus", "creem", "bolt stackblitz", "stackblitz"], category: "Subscriptions" },
     // Food & Drink — placed ABOVE Transport so "uber eat" and "subway" match here first
@@ -90,8 +101,8 @@ const CATEGORY_RULES: { keywords: string[]; category: Category }[] = [
     { keywords: ["united", "delta", "american air", "southwest", "jetblue", "allegiant", "allegnt", "airbnb", "hotel", "flight", "airline", "marriott", "hilton", "hyatt", "booking.com", "expedia", "trivago", "cruise", "resort"], category: "Travel" },
     // Shopping
     { keywords: ["amazon", "target", "walmart", "ebay", "etsy", "best buy", "apple store", "ikea", "home depot", "lowe", "nordstrom", "macy", "tj maxx", "marshall", "ross", "zappos", "nike", "adidas", "gap", "old navy", "zara", "h&m", "shein", "sparkfun", "online purchase", "usps"], category: "Shopping" },
-    // Education / Student Loans
-    { keywords: ["dept education", "student ln", "student loan", "tuition", "university", "college", "school", "textbook", "udemy", "coursera", "skillshare", "masterclass", "education"], category: "Education" },
+    // Education (tuition & learning — student loan payments are handled under Transfer above)
+    { keywords: ["tuition", "university", "college", "school", "textbook", "udemy", "coursera", "skillshare", "masterclass", "education"], category: "Education" },
     // Personal Care
     { keywords: ["salon", "barber", "haircut", "spa", "nail", "beauty", "skincare", "sephora", "ulta", "cosmetic", "grooming"], category: "Personal Care" },
     // Gifts & Donations
