@@ -242,7 +242,20 @@ export function getDisplayMerchant(tx: {
     merchant_name?: string;
     name?: string;
     merchant?: string;
+    type?: string;
+    confidence_score?: string;
+    category?: string | string[] | null;
 }): string {
     const raw = tx.merchant_name || tx.name || tx.merchant || "";
-    return cleanMerchantName(raw);
+    const cleaned = cleanMerchantName(raw);
+
+    // For predicted transactions with low/medium confidence, show category
+    // instead of a fake merchant name. High-confidence recurring items
+    // (subscriptions, rent, utilities) keep their real merchant names.
+    if (tx.type === "predicted" && tx.confidence_score !== "high") {
+        const cat = Array.isArray(tx.category) ? tx.category[0] : (tx.category || "");
+        if (cat && cat !== "Other") return cat;
+    }
+
+    return cleaned;
 }

@@ -41,7 +41,9 @@ export function ForecastCalendar() {
                             <td className="px-6 py-4 font-medium text-white">
                                 {new Date(day.fullDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 <div className="text-xs text-zinc-500 font-normal mt-0.5">
-                                    {day.transactions.map((t) => t.merchant).join(", ")}
+                                    {day.transactions.map((t) => 
+                                        t.confidence_score === "high" ? t.merchant : (t.category || t.merchant)
+                                    ).join(", ")}
                                 </div>
                             </td>
                             <td className="px-6 py-4 text-emerald-500">
