@@ -188,49 +188,63 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
             const profile = buildFinancialProfileSummary(history);
             const baseline = summarizeBaselineForecast(baseForecast);
 
-            const prompt = `Analyze this financial data and provide monthly adjustment factors for the next 3 months.
+            // Compute the 3 forecast month names for context
+            const refMonth = referenceDate.getMonth();
+            const refYear = referenceDate.getFullYear();
+            const forecastMonthNames = [0, 1, 2].map(i => {
+                const d = new Date(refYear, refMonth + 1 + i, 1);
+                return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            });
 
-Monthly expenses (last 12): [${profile.monthlyExpenses.join(', ')}]
-Monthly income (last 12): [${profile.monthlyIncome.join(', ')}]
-Detected recurring expenses: ${profile.recurringExpenseSummary}
-Current deterministic forecast: $${baseline.monthlyExpenses.toFixed(0)}/mo expenses, $${baseline.monthlyIncome.toFixed(0)}/mo income
+            const prompt = `You are a precise financial forecasting engine. Predict EXACT monthly dollar amounts.
 
-You are a financial forecasting calibration engine. Your job is to correct the deterministic forecast based on trends in the data.
+HISTORICAL MONTHLY EXPENSES (oldest to newest):
+[${profile.monthlyExpenses.join(', ')}]
 
-Look at the RECENT TREND in monthly expenses (last 3-4 months vs earlier months). If spending is trending up or down, adjust the multiplier accordingly. If stable and close to baseline, keep near 1.0.
+HISTORICAL MONTHLY INCOME (oldest to newest):
+[${profile.monthlyIncome.join(', ')}]
 
-For income: compute the MEDIAN of all monthly income values, ignoring the top 1-2 outliers (e.g., one-time $10K deposits). Use that median as the income target for all 3 months.
+KNOWN RECURRING EXPENSES: ${profile.recurringExpenseSummary}
 
-Return JSON:
+TASK: Predict total expenses and total income for each of the next 3 months: ${forecastMonthNames.join(', ')}.
+
+RULES:
+1. For EXPENSES: Look at the last 3-4 months closely. If spending recently increased or decreased, your prediction should reflect the NEW level, not the historical average. Recent months matter more than old months.
+2. For INCOME: This person has variable income. Ignore extreme outliers (any month >2x the median). Predict based on the typical (median) monthly income.
+3. Be SPECIFIC — predict actual dollar amounts, not ranges.
+4. Your predictions should be realistic given the data. Don't predict $1000 in expenses if the last 4 months averaged $3000.
+
+Return ONLY this JSON:
 {
-  "expense_multipliers": [month1_multiplier, month2_multiplier, month3_multiplier],
-  "income_targets": [month1_dollar_target, month2_dollar_target, month3_dollar_target],
-  "reasoning": "brief explanation"
-}
-
-Multiplier guidelines:
-- 1.0 = no change from baseline
-- 1.1-1.5 = moderate upward adjustment (recent spending higher than baseline)
-- 0.7-0.9 = moderate downward adjustment
-- Only use >1.5 or <0.7 if there's a VERY clear regime change in the data
-Income targets are actual dollar amounts per month.`;
+  "monthly_expenses": [month1_dollars, month2_dollars, month3_dollars],
+  "monthly_income": [month1_dollars, month2_dollars, month3_dollars],
+  "reasoning": "one sentence explanation"
+}`;
 
             const result = await model.generateContent(prompt);
             const text = result.response.text();
             const geminiResponse = JSON.parse(text) as {
-                expense_multipliers: number[];
-                income_targets: number[];
+                monthly_expenses: number[];
+                monthly_income: number[];
                 reasoning: string;
             };
 
-            // Validate and apply Gemini's refinements
-            const refinedForecast = applyGeminiRefinements(
+            // Validate response
+            if (!Array.isArray(geminiResponse.monthly_expenses) || geminiResponse.monthly_expenses.length !== 3 ||
+                !Array.isArray(geminiResponse.monthly_income) || geminiResponse.monthly_income.length !== 3) {
+                console.warn("[Gemini] Invalid response format, falling back to deterministic");
+                return validateForecast(baseForecast, referenceDate);
+            }
+
+            // Apply Gemini's dollar targets to scale the deterministic forecast
+            const refinedForecast = applyGeminiTargets(
                 baseForecast,
-                geminiResponse,
-                baseline
+                geminiResponse.monthly_expenses,
+                geminiResponse.monthly_income,
+                referenceDate
             );
 
-            console.log(`[Gemini Refinement] Applied adjustments: ${geminiResponse.reasoning}`);
+            console.log(`[Gemini Refinement] ${geminiResponse.reasoning}`);
             return validateForecast(refinedForecast, referenceDate);
 
         } catch (error) {
@@ -403,80 +417,70 @@ function summarizeBaselineForecast(forecast: Forecast) {
     };
 }
 
-function applyGeminiRefinements(
-    baseForecast: Forecast, 
-    geminiResponse: { expense_multipliers: number[]; income_targets: number[]; reasoning: string },
-    baseline: { monthlyIncome: number; monthlyExpenses: number }
+/**
+ * Apply Gemini's direct dollar-amount predictions as calibration targets.
+ * Scales all transactions in each forecast month to match Gemini's predicted totals.
+ * This is the core of the hybrid approach: deterministic engine provides STRUCTURE
+ * (which categories, which days), Gemini provides MAGNITUDE (how much per month).
+ */
+function applyGeminiTargets(
+    baseForecast: Forecast,
+    expenseTargets: number[],
+    incomeTargets: number[],
+    referenceDate: Date
 ): Forecast {
-    // Validate Gemini response
-    const { expense_multipliers, income_targets } = geminiResponse;
-    
-    if (!Array.isArray(expense_multipliers) || expense_multipliers.length !== 3 ||
-        !Array.isArray(income_targets) || income_targets.length !== 3) {
-        console.warn("Invalid Gemini response format, using baseline forecast");
-        return baseForecast;
-    }
-    
-    // Clamp multipliers to reasonable ranges to prevent extreme adjustments
-    // Tighter clamp on expense multipliers — Gemini tends to over-adjust
-    const clampedExpenseMultipliers = expense_multipliers.map(m => 
-        Math.max(0.7, Math.min(1.8, m || 1.0))
-    );
-    const clampedIncomeTargets = income_targets.map(t => 
-        Math.max(0, Math.min(baseline.monthlyIncome * 3, t || baseline.monthlyIncome))
-    );
-    
-    // Group transactions by month
+    // Group transactions by forecast month
     const txsByMonth = new Map<string, typeof baseForecast.predicted_transactions>();
     for (const tx of baseForecast.predicted_transactions) {
         const month = tx.date.substring(0, 7);
-        if (!txsByMonth.has(month)) {
-            txsByMonth.set(month, []);
-        }
+        if (!txsByMonth.has(month)) txsByMonth.set(month, []);
         txsByMonth.get(month)!.push(tx);
     }
-    
-    // Apply adjustments month by month
-    const refinedTransactions = [];
+
+    const refinedTransactions: typeof baseForecast.predicted_transactions = [];
     const months = [...txsByMonth.keys()].sort();
-    
+
     for (let i = 0; i < months.length; i++) {
         const month = months[i];
         const monthTxs = txsByMonth.get(month) || [];
-        const monthIndex = Math.min(i, 2); // Use last multiplier for any months beyond 3
-        
-        const expenseMultiplier = clampedExpenseMultipliers[monthIndex];
-        const incomeTarget = clampedIncomeTargets[monthIndex];
-        
-        // Calculate current monthly totals
-        const currentMonthlyIncome = monthTxs
-            .filter(tx => tx.amount > 0)
-            .reduce((sum, tx) => sum + tx.amount, 0);
-        const currentMonthlyExpenses = monthTxs
+        const monthIndex = Math.min(i, 2);
+
+        const targetExpenses = Math.max(100, expenseTargets[monthIndex] || 0);
+        const targetIncome = Math.max(0, incomeTargets[monthIndex] || 0);
+
+        // Current totals from deterministic forecast
+        const currentExpenses = monthTxs
             .filter(tx => tx.amount < 0)
             .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-            
-        // Apply refinements
-        const incomeScale = currentMonthlyIncome > 0 ? incomeTarget / currentMonthlyIncome : 1;
-        
+        const currentIncome = monthTxs
+            .filter(tx => tx.amount > 0)
+            .reduce((sum, tx) => sum + tx.amount, 0);
+
+        // Keep expenses at deterministic level — Gemini expense predictions are
+        // consistently unreliable (over-predicts early months, mixed on later ones).
+        // The deterministic calibration already targets historical averages.
+        const expenseScale = 1.0;
+        const incomeScale = currentIncome > 0
+            ? Math.max(0.1, Math.min(5.0, targetIncome / currentIncome))
+            : 1;
+
         for (const tx of monthTxs) {
-            if (tx.amount > 0) {
-                // Scale income toward target
+            if (tx.amount < 0) {
                 refinedTransactions.push({
                     ...tx,
-                    amount: Math.round(tx.amount * incomeScale * 100) / 100
+                    amount: Math.round(tx.amount * expenseScale * 100) / 100,
                 });
             } else {
-                // Keep expenses at deterministic baseline — Gemini expense adjustments
-                // have mixed results and often make things worse. The deterministic
-                // calibration already targets historical averages.
-                refinedTransactions.push({ ...tx });
+                refinedTransactions.push({
+                    ...tx,
+                    amount: Math.round(tx.amount * incomeScale * 100) / 100,
+                });
             }
         }
     }
-    
+
     return {
         ...baseForecast,
-        predicted_transactions: refinedTransactions
+        predicted_transactions: refinedTransactions,
     };
 }
