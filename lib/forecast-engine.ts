@@ -647,18 +647,18 @@ function detectRecurringSeries(
         // Airlines, hotels, shipping, legal services, etc. are event-driven.
         if (isNeverRecurring(merchant)) continue;
 
-        // ── Minimum occurrence thresholds based on category ──
-        // MUCH more aggressive recurring detection for production-grade accuracy
-        // Income & subscriptions/bills: even 2+ occurrences can be recurring  
-        // Sporadic categories: need 3+ (reduced from 4+)
-        // Everything else: only need 2+ (reduced from 3+)
+        // ── CONSERVATIVE minimum occurrence thresholds for stability ──
+        // The original aggressive detection was creating unstable, spurious patterns.
+        // Use higher thresholds to ensure only truly recurring patterns are detected.
         const primaryCategory = all[0]?.category || "Other";
         const isSub = isSubscription(merchant);
         const isIncomeSeries = all.every(t => t.amount > 0);
         const stableIncomeSeries = isIncomeSeries && isStableIncomeMerchant(merchant);
-        const expenseMinOccurrences = SPORADIC_CATEGORIES.has(primaryCategory) ? 3 : 2; // Reduced thresholds
-        const incomeMinOccurrences = stableIncomeSeries ? 2 : 2; // More aggressive income detection
-        const minOccurrences = isSub ? 2 : isIncomeSeries ? incomeMinOccurrences : expenseMinOccurrences;
+        
+        // Much more conservative thresholds to prevent spurious patterns
+        const expenseMinOccurrences = SPORADIC_CATEGORIES.has(primaryCategory) ? 4 : 3; // Increased requirements
+        const incomeMinOccurrences = stableIncomeSeries ? 2 : 3; // Keep income detection reasonable
+        const minOccurrences = isSub ? 3 : isIncomeSeries ? incomeMinOccurrences : expenseMinOccurrences; // Higher for subscriptions too
 
         if (all.length < minOccurrences) continue;
 
@@ -733,6 +733,17 @@ function detectRecurringSeries(
             const typicalAbs = median(absAmounts);
             // Use weighted recent for prediction
             const recentAbs = weightedRecentAvg(absAmounts);
+            
+            // ── CONSERVATIVE amount threshold: skip tiny recurring patterns ──
+            // Patterns under $10/month are likely spurious or irrelevant for forecasting
+            const monthlyEquivalent = typicalAbs * (
+                cadence === "weekly" ? 4.33 :     // ~4.33 weeks per month
+                cadence === "biweekly" ? 2.17 :   // ~2.17 biweeks per month  
+                cadence === "quarterly" ? 0.33 :  // ~0.33 quarters per month
+                1  // monthly
+            );
+            if (monthlyEquivalent < 10) continue; // Skip patterns under $10/month
+            
             // Is it fixed? Check CV of cleaned amounts
             const amtCV = typicalAbs > 0 ? stdDev(absAmounts) / typicalAbs : 0;
             const isFixed = amtCV < 0.08;
@@ -1724,6 +1735,16 @@ export function generateDeterministicForecast(
 
     // Detect patterns
     const recurring = detectRecurringSeries(cleaned, today);
+    
+    // TEMPORARY LOGGING: What recurring series are detected?
+    console.log('\n=== RECURRING SERIES DETECTED ===');
+    const expenseRecurring = recurring.filter(r => r.type === "expense");
+    console.log(`Total expense recurring series: ${expenseRecurring.length}`);
+    for (const r of expenseRecurring.sort((a, b) => Math.abs(b.recent_amount) - Math.abs(a.recent_amount))) {
+        console.log(`${r.merchant} (${r.category}): ${r.cadence}, $${Math.abs(r.recent_amount).toFixed(2)}, conf=${r.confidence}, count=${r.count}`);
+    }
+    console.log('=== END RECURRING SERIES ===\n');
+    
     const recurringExpenseMerchants = new Set(
         recurring.filter((r) => r.type === "expense").map((r) => r.merchant)
     );
