@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-03-17T00:52:07.448Z",
+  "outputDir": "/Users/lucasaust/forecaster2/diagnostics/deep-dive-2026-03-17T00-52-07-447Z",
+  "monthsAnalyzed": 21,
+  "avgIncomeErrPct": 50.81,
+  "avgExpenseErrPct": 47.17,
+  "avgNetAbsErr": 1605.19,
+  "worstMonths": [
+    {
+      "month": "2025-01",
+      "netAbsErr": 10842.85,
+      "incomeAbsErrPct": 92.06,
+      "expenseAbsErrPct": 25.19,
+      "predictedNet": 63.27,
+      "actualNet": 10906.12
+    },
+    {
+      "month": "2025-05",
+      "netAbsErr": 5362.15,
+      "incomeAbsErrPct": 89.69,
+      "expenseAbsErrPct": 72.51,
+      "predictedNet": -37.16,
+      "actualNet": 5324.99
+    },
+    {
+      "month": "2024-05",
+      "netAbsErr": 3448.09,
+      "incomeAbsErrPct": 89.34,
+      "expenseAbsErrPct": 21.66,
+      "predictedNet": -43.15,
+      "actualNet": 3404.94
+    },
+    {
+      "month": "2026-01",
+      "netAbsErr": 2950.32,
+      "incomeAbsErrPct": 23.89,
+      "expenseAbsErrPct": 10.05,
+      "predictedNet": 11168.26,
+      "actualNet": 8217.94
+    },
+    {
+      "month": "2025-11",
+      "netAbsErr": 2213.71,
+      "incomeAbsErrPct": 87.46,
+      "expenseAbsErrPct": 14.61,
+      "predictedNet": 195.71,
+      "actualNet": -2018
+    },
+    {
+      "month": "2025-04",
+      "netAbsErr": 1928.67,
+      "incomeAbsErrPct": 35.97,
+      "expenseAbsErrPct": 79.48,
+      "predictedNet": 311.47,
+      "actualNet": -1617.2
+    }
+  ]
+}

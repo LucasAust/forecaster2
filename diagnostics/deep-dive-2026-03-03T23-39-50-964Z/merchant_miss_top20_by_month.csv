@@ -1,0 +1,421 @@
+month,merchant,predicted,actual,absGap
+2024-05,pay,0.00,173.52,173.52
+2024-05,speedway,0.00,81.89,81.89
+2024-05,idemia tsa pre,0.00,70.00,70.00
+2024-05,wegmans,0.00,65.62,65.62
+2024-05,fsp the links at greyston,0.00,65.00,65.00
+2024-05,evvnt st pats in five,51.54,0.00,51.54
+2024-05,par tee golf,48.43,0.00,48.43
+2024-05,richland county recreatio,48.26,0.00,48.26
+2024-05,ck oak hills golf clu,47.62,0.00,47.62
+2024-05,vsi charleston golf,46.13,0.00,46.13
+2024-05,wayside garden center,0.00,39.95,39.95
+2024-05,exxonmobil,0.00,30.28,30.28
+2024-05,publix,29.77,0.00,29.77
+2024-05,wendy's,28.17,0.00,28.17
+2024-05,palmetto pig,27.84,0.00,27.84
+2024-05,amk univ of sc s and e,27.56,0.00,27.56
+2024-05,tsunami vista,26.17,0.00,26.17
+2024-05,jack brown`s beer,25.93,0.00,25.93
+2024-05,tinto y crema,25.44,0.00,25.44
+2024-05,home depot,0.00,25.35,25.35
+2024-06,the captains table,0.00,205.13,205.13
+2024-06,tin cup social,0.00,105.00,105.00
+2024-06,speedway,0.00,88.23,88.23
+2024-06,target,0.00,67.47,67.47
+2024-06,value mart,0.00,57.37,57.37
+2024-06,ck oak hills golf clu,49.72,0.00,49.72
+2024-06,richland county recreatio,46.59,0.00,46.59
+2024-06,red sox team store-,0.00,40.00,40.00
+2024-06,nba league pass,39.31,0.00,39.31
+2024-06,lansdowne pub boston,0.00,39.00,39.00
+2024-06,etsy,0.00,37.80,37.80
+2024-06,captain jacks good time t,0.00,37.40,37.40
+2024-06,rochester beer park,0.00,37.00,37.00
+2024-06,exxonmobil,36.97,0.00,36.97
+2024-06,bullpen kitchen &amp; tap,0.00,33.00,33.00
+2024-06,tsunami vista,30.32,0.00,30.32
+2024-06,publix,27.94,0.00,27.94
+2024-06,wendy's,27.65,0.00,27.65
+2024-06,pay,0.00,25.00,25.00
+2024-06,amk fenway park conces,0.00,24.97,24.97
+2024-07,yardi,0.00,500.00,500.00
+2024-07,amazon,0.00,426.59,426.59
+2024-07,panorama pediatric group,0.00,83.64,83.64
+2024-07,wal-mart,0.00,53.95,53.95
+2024-07,wendy's,48.86,0.00,48.86
+2024-07,wegmans,44.86,0.00,44.86
+2024-07,publix,44.68,0.00,44.68
+2024-07,richland county recreatio,40.77,0.00,40.77
+2024-07,gnc.com,0.00,37.98,37.98
+2024-07,par tee golf,37.87,0.00,37.87
+2024-07,sq beauty by renee,0.00,33.75,33.75
+2024-07,ck oak hills golf clu,33.48,0.00,33.48
+2024-07,pier fifty three,0.00,33.30,33.30
+2024-07,jack brown`s beer,32.57,0.00,32.57
+2024-07,bww webster 563,0.00,31.59,31.59
+2024-07,tsunami vista,31.52,0.00,31.52
+2024-07,palmetto pig,30.19,0.00,30.19
+2024-07,speedway,55.77,84.41,28.64
+2024-07,tin cup social,48.88,22.82,26.06
+2024-07,walgreens,0.00,14.78,14.78
+2024-08,pay,0.00,171.15,171.15
+2024-08,ls charwood golf club,0.00,122.20,122.20
+2024-08,ck oak hills golf clu,24.85,120.44,95.59
+2024-08,nikepos_us,0.00,60.71,60.71
+2024-08,parkview fairways g.c.,0.00,44.00,44.00
+2024-08,shadow lake,0.00,43.00,43.00
+2024-08,exxonmobil,38.33,0.00,38.33
+2024-08,sunoco,36.53,0.00,36.53
+2024-08,dicks sporting goods,0.00,36.23,36.23
+2024-08,value mart,35.26,0.00,35.26
+2024-08,eagle vale golf club-b,0.00,35.00,35.00
+2024-08,publix,32.33,0.00,32.33
+2024-08,wendy's,32.02,0.00,32.02
+2024-08,tsunami vista,31.97,0.00,31.97
+2024-08,wegmans,31.78,0.00,31.78
+2024-08,jack brown`s beer,31.02,0.00,31.02
+2024-08,palmetto pig,30.33,0.00,30.33
+2024-08,speedway,36.75,65.90,29.15
+2024-08,richland county recreatio,27.61,0.00,27.61
+2024-08,vsi charleston golf,25.47,0.00,25.47
+2024-09,tin cup social,111.97,0.00,111.97
+2024-09,publix,29.34,136.68,107.34
+2024-09,speedway,106.44,0.00,106.44
+2024-09,jays bookstore,0.00,75.60,75.60
+2024-09,dominion energy,0.00,66.00,66.00
+2024-09,greens discount bevera,0.00,62.01,62.01
+2024-09,ck oak hills golf clu,44.28,0.00,44.28
+2024-09,autozone,0.00,39.95,39.95
+2024-09,richland county recreatio,42.61,80.00,37.39
+2024-09,cvs pharmacy,24.26,60.42,36.16
+2024-09,sq carolina barber shop,0.00,32.50,32.50
+2024-09,max,38.37,9.99,28.38
+2024-09,addam's univ bkst,0.00,28.08,28.08
+2024-09,shell,0.00,27.13,27.13
+2024-09,wendy's,26.23,0.00,26.23
+2024-09,target,26.21,0.00,26.21
+2024-09,wegmans,25.84,0.00,25.84
+2024-09,palmetto pig,12.38,35.02,22.64
+2024-09,chicken bloom,0.00,21.50,21.50
+2024-09,jack brown`s columbia,0.00,21.42,21.42
+2024-10,dominion energy,0.00,113.31,113.31
+2024-10,cvs pharmacy,0.00,93.42,93.42
+2024-10,teequest,0.00,90.00,90.00
+2024-10,publix,33.08,83.82,50.74
+2024-10,tst jakes on devine,0.00,47.50,47.50
+2024-10,cb18,0.00,41.74,41.74
+2024-10,richland county recreatio,40.22,0.00,40.22
+2024-10,sq carolina barber shop,0.00,34.50,34.50
+2024-10,wendy's,34.13,0.00,34.13
+2024-10,wegmans,31.73,0.00,31.73
+2024-10,daves hot chicken,30.61,0.00,30.61
+2024-10,tin cup social,29.71,0.00,29.71
+2024-10,target,26.21,0.00,26.21
+2024-10,wal-mart,0.00,24.55,24.55
+2024-10,moe's 223,31.23,8.79,22.44
+2024-10,five guys sc qsr,0.00,22.25,22.25
+2024-10,par tee golf,0.00,22.00,22.00
+2024-10,openai,0.00,21.60,21.60
+2024-10,sc state fair - etix,0.00,20.00,20.00
+2024-10,tst the salty nut cafe,0.00,20.00,20.00
+2024-11,advance auto parts,0.00,308.00,308.00
+2024-11,image line us,0.00,150.12,150.12
+2024-11,dominion energy,0.00,89.73,89.73
+2024-11,glf goldenhills,0.00,74.00,74.00
+2024-11,mooneyhan's auto service,0.00,65.00,65.00
+2024-11,publix,0.00,52.86,52.86
+2024-11,wegmans,46.56,0.00,46.56
+2024-11,wal-mart,46.52,0.00,46.52
+2024-11,target,46.18,0.00,46.18
+2024-11,five guys sc qsr,0.00,42.39,42.39
+2024-11,tst stoners pizza joint,0.00,41.50,41.50
+2024-11,cvs pharmacy,20.91,60.73,39.82
+2024-11,moe's 223,45.10,8.79,36.31
+2024-11,amk univ of sc s and e,0.00,33.55,33.55
+2024-11,palmetto pig,45.77,18.54,27.23
+2024-11,tin cup social,57.58,31.25,26.33
+2024-11,tst jakes on devine,43.46,18.10,25.36
+2024-11,richland county recreatio,22.58,0.00,22.58
+2024-11,ck oak hills golf clu,22.43,0.00,22.43
+2024-11,openai,0.00,21.60,21.60
+2024-12,lee ent advertising ap,0.00,374.60,374.60
+2024-12,nysdos business express 5,0.00,235.00,235.00
+2024-12,costco,0.00,203.45,203.45
+2024-12,rps columbia,0.00,119.00,119.00
+2024-12,bee newspapers,0.00,114.46,114.46
+2024-12,the muffler shop of colum,0.00,80.85,80.85
+2024-12,byrne dairy,0.00,69.43,69.43
+2024-12,ck oak hills golf clu,17.26,71.11,53.85
+2024-12,konnichiwa of winston sa,0.00,42.18,42.18
+2024-12,greens discount bevera,41.30,0.00,41.30
+2024-12,moe's 223,39.39,0.00,39.39
+2024-12,target,38.85,0.00,38.85
+2024-12,tst home team bbq - colu,0.00,36.94,36.94
+2024-12,bp,0.00,30.81,30.81
+2024-12,exxonmobil,10.61,37.95,27.34
+2024-12,palmetto pig,40.50,13.39,27.11
+2024-12,sq beauty by renee,22.53,0.00,22.53
+2024-12,openai,0.00,21.60,21.60
+2024-12,speedway,8.93,30.11,21.18
+2024-12,sq carolina barber shop,19.79,0.00,19.79
+2025-01,usc campus recreation,199.23,0.00,199.23
+2025-01,tm ticketmaster,0.00,63.45,63.45
+2025-01,hibachi house,0.00,42.25,42.25
+2025-01,dominion energy,87.40,47.93,39.47
+2025-01,tst the salty nut cafe,0.00,33.33,33.33
+2025-01,tin cup social,43.90,11.83,32.07
+2025-01,palmetto pig,44.73,13.39,31.34
+2025-01,cb18,30.66,0.00,30.66
+2025-01,paypal,0.00,30.00,30.00
+2025-01,chipotle,28.06,0.00,28.06
+2025-01,five guys sc qsr,26.04,0.00,26.04
+2025-01,cvs pharmacy,21.49,45.21,23.72
+2025-01,richland county recreatio,23.29,0.00,23.29
+2025-01,greens discount bevera,44.06,21.11,22.95
+2025-01,walgreens,22.32,0.00,22.32
+2025-01,panorama pediatric group,21.41,0.00,21.41
+2025-01,sq beauty by renee,21.11,0.00,21.11
+2025-01,mcdonald's,0.00,20.20,20.20
+2025-01,jersey mikes,0.00,19.97,19.97
+2025-01,carolina cafe,0.00,17.76,17.76
+2025-02,02/27,0.00,100.00,100.00
+2025-02,vivid seats miami hea,0.00,84.32,84.32
+2025-02,cvs pharmacy,21.33,92.78,71.45
+2025-02,bww columbia 368,0.00,71.23,71.23
+2025-02,tst crazy wings - lincol,0.00,52.99,52.99
+2025-02,publix,18.28,53.06,34.78
+2025-02,palmetto pig,34.55,0.00,34.55
+2025-02,greens discount bevera,33.39,0.00,33.39
+2025-02,tin cup social,33.30,0.00,33.30
+2025-02,ck oak hills golf clu,19.20,50.00,30.80
+2025-02,exxonmobil,20.10,48.75,28.65
+2025-02,hibachi house,0.00,27.50,27.50
+2025-02,speedway,21.98,0.00,21.98
+2025-02,richland county recreatio,20.49,0.00,20.49
+2025-02,jj tea house,0.00,20.23,20.23
+2025-02,sq carolina barber shop,20.10,0.00,20.10
+2025-02,stackblitz,0.00,20.00,20.00
+2025-02,dominion energy,72.25,91.18,18.93
+2025-02,amazon,0.00,18.90,18.90
+2025-02,chipotle,17.25,0.00,17.25
+2025-03,yardi,0.00,1057.00,1057.00
+2025-03,ricks bar key west,0.00,179.48,179.48
+2025-03,sp eric emanuel,0.00,104.86,104.86
+2025-03,vivid seats florida p,0.00,89.58,89.58
+2025-03,circle k #,0.00,69.73,69.73
+2025-03,1-800-flowers.com,0.00,69.62,69.62
+2025-03,amazon,0.00,67.16,67.16
+2025-03,nysdos business express 5,62.55,0.00,62.55
+2025-03,stackblitz,0.00,50.00,50.00
+2025-03,spectrum,0.00,48.69,48.69
+2025-03,the corner grocery,0.00,46.74,46.74
+2025-03,savage craft ale works,0.00,45.95,45.95
+2025-03,food lion,0.00,43.60,43.60
+2025-03,greens discount bevera,39.14,0.00,39.14
+2025-03,tsunami vista,0.00,36.90,36.90
+2025-03,cvs pharmacy,19.07,55.58,36.51
+2025-03,aviationparkingonlinepmt,0.00,36.00,36.00
+2025-03,wawa,0.00,35.38,35.38
+2025-03,marathon petro,0.00,33.68,33.68
+2025-03,publix,35.42,68.85,33.43
+2025-04,yardi,0.00,1057.00,1057.00
+2025-04,publix,39.25,316.95,277.70
+2025-04,sp oak hall cap gown,0.00,103.77,103.77
+2025-04,cvs pharmacy,20.55,87.20,66.65
+2025-04,sunoco,10.72,76.06,65.34
+2025-04,ls greens beverages,0.00,64.75,64.75
+2025-04,noma by al amir,0.00,51.01,51.01
+2025-04,greens discount bevera,40.33,0.00,40.33
+2025-04,five guys sc qsr,0.00,37.35,37.35
+2025-04,tst jakes on devine,37.17,0.00,37.17
+2025-04,sq carolina barber shop,0.00,31.25,31.25
+2025-04,cb18,38.51,10.00,28.51
+2025-04,exxonmobil,12.35,38.13,25.78
+2025-04,tst jack brown's joint -,0.00,22.58,22.58
+2025-04,tst crazy wings - lincol,21.32,0.00,21.32
+2025-04,moe's 223,21.02,0.00,21.02
+2025-04,ricks bar key west,20.24,0.00,20.24
+2025-04,stackblitz,0.00,20.00,20.00
+2025-04,par tee golf,0.00,20.00,20.00
+2025-04,jj tea house,0.00,19.60,19.60
+2025-05,yardi,0.00,1057.00,1057.00
+2025-05,chase,0.00,500.00,500.00
+2025-05,wwwintegri wwwintegri st-j7j2f9k1n8s7 web id:,0.00,410.25,410.25
+2025-05,sp shirtinabox-us,0.00,137.48,137.48
+2025-05,midas auto &amp; tire,0.00,107.77,107.77
+2025-05,ls greens beverages,92.19,0.00,92.19
+2025-05,cafe strudel - wc,0.00,78.77,78.77
+2025-05,ricks bar key west,71.24,0.00,71.24
+2025-05,sycamore golf club,0.00,69.51,69.51
+2025-05,ck oak hills golf clu,12.46,78.18,65.72
+2025-05,palmetto pig,75.91,12.36,63.55
+2025-05,seatgeek tickets,0.00,60.18,60.18
+2025-05,cvs pharmacy,52.86,0.00,52.86
+2025-05,target,0.00,50.18,50.18
+2025-05,five guys sc qsr,49.12,0.00,49.12
+2025-05,tst jakes on devine,74.53,25.50,49.03
+2025-05,greens discount bevera,47.84,0.00,47.84
+2025-05,speedway,12.22,56.19,43.97
+2025-05,cantina 76 main st,0.00,43.28,43.28
+2025-05,bp,0.00,37.57,37.57
+2025-06,yardi,0.00,1057.00,1057.00
+2025-06,costco,0.00,184.23,184.23
+2025-06,boulevard super liquors,0.00,144.95,144.95
+2025-06,shadow lake,0.00,111.00,111.00
+2025-06,cb18,74.87,0.00,74.87
+2025-06,blue heron golf course,0.00,74.74,74.74
+2025-06,ricks bar key west,73.56,0.00,73.56
+2025-06,armk fenway concession,0.00,72.91,72.91
+2025-06,publix,70.97,0.00,70.97
+2025-06,tst jakes on devine,69.60,0.00,69.60
+2025-06,sp shirtinabox-us,0.00,64.99,64.99
+2025-06,palmetto pig,63.88,0.00,63.88
+2025-06,sycamore golf club,0.00,56.75,56.75
+2025-06,cvs pharmacy,53.18,0.00,53.18
+2025-06,sq carolina barber shop,50.85,0.00,50.85
+2025-06,creem.io,0.00,49.90,49.90
+2025-06,tst crazy wings - lincol,47.93,0.00,47.93
+2025-06,tst touchdowns,45.06,0.00,45.06
+2025-06,wawa,0.00,41.29,41.29
+2025-06,speedway,22.75,61.00,38.25
+2025-07,rent,0.00,1221.63,1221.63
+2025-07,yardi,0.00,492.00,492.00
+2025-07,creem.io,0.00,99.90,99.90
+2025-07,mlb store,0.00,79.99,79.99
+2025-07,sp shirtinabox-us,64.99,0.00,64.99
+2025-07,tst crazy wings - lincol,57.31,0.00,57.31
+2025-07,amazon,56.15,0.00,56.15
+2025-07,tst jakes on devine,55.76,0.00,55.76
+2025-07,palmetto pig,55.39,0.00,55.39
+2025-07,ricks bar key west,54.72,0.00,54.72
+2025-07,speedway,21.89,75.85,53.96
+2025-07,seatgeek tickets,0.00,53.25,53.25
+2025-07,publix,52.27,0.00,52.27
+2025-07,cb18,51.30,0.00,51.30
+2025-07,mta mnr etix ticket,0.00,35.00,35.00
+2025-07,tin cup social,34.98,0.00,34.98
+2025-07,hairzoo - east rochester,0.00,26.00,26.00
+2025-07,cvs pharmacy,25.36,0.00,25.36
+2025-07,aviationparkingonlinepmt,23.78,0.00,23.78
+2025-07,sq carolina barber shop,22.49,0.00,22.49
+2025-08,rent,0.00,1633.00,1633.00
+2025-08,usc tuition &amp; fees,0.00,1088.20,1088.20
+2025-08,wm supercenter,0.00,480.43,480.43
+2025-08,teequest,0.00,200.00,200.00
+2025-08,playstation,0.00,134.97,134.97
+2025-08,creem.io,0.00,99.90,99.90
+2025-08,dominion energy,94.98,0.00,94.98
+2025-08,sp shirtinabox-us,64.99,0.00,64.99
+2025-08,tst touchdowns,0.00,56.20,56.20
+2025-08,fsp furman university,0.00,55.88,55.88
+2025-08,ricks bar key west,55.25,0.00,55.25
+2025-08,cb18,52.07,0.00,52.07
+2025-08,google cloud,0.00,49.26,49.26
+2025-08,digitalocean,0.00,40.00,40.00
+2025-08,shadow lake,0.00,40.00,40.00
+2025-08,tst lewis barbecue green,0.00,38.88,38.88
+2025-08,marathon,0.00,35.16,35.16
+2025-08,seatgeek tickets,33.84,0.00,33.84
+2025-08,amazon,33.69,0.00,33.69
+2025-08,ls greens beverages,33.10,0.00,33.10
+2025-09,rent,0.00,1679.44,1679.44
+2025-09,amia.org,0.00,650.00,650.00
+2025-09,yardi,611.25,0.00,611.25
+2025-09,publix,51.26,203.05,151.79
+2025-09,apple.com/us,0.00,106.92,106.92
+2025-09,dominion energy,94.98,166.16,71.18
+2025-09,creem.io,29.46,99.90,70.44
+2025-09,sp shirtinabox-us,64.99,0.00,64.99
+2025-09,ck oak hills golf clu,61.54,0.00,61.54
+2025-09,stackblitz,57.84,0.00,57.84
+2025-09,wwwintegri wwwintegri st-j7j2f9k1n8s7 web id:,56.72,0.00,56.72
+2025-09,ricks bar key west,54.93,0.00,54.93
+2025-09,tst jakes on devine,50.50,0.00,50.50
+2025-09,cb18,49.29,0.00,49.29
+2025-09,chase,48.94,0.00,48.94
+2025-09,digitalocean,0.00,40.00,40.00
+2025-09,shell,0.00,37.62,37.62
+2025-09,palmetto pig,34.75,0.00,34.75
+2025-09,supabase,0.00,34.62,34.62
+2025-09,sq carolina barber shop,0.00,32.50,32.50
+2025-10,amia.org,346.27,0.00,346.27
+2025-10,microsoft-g,0.00,311.04,311.04
+2025-10,rent,1568.39,1829.70,261.31
+2025-10,midas auto &amp; tire,0.00,128.08,128.08
+2025-10,publix,57.34,179.30,121.96
+2025-10,creem.io,93.75,0.00,93.75
+2025-10,northwoods golf club,24.31,111.02,86.71
+2025-10,tst jakes on devine,53.41,0.00,53.41
+2025-10,cb18,52.79,0.00,52.79
+2025-10,google cloud,0.00,41.47,41.47
+2025-10,palmetto pig,38.16,0.00,38.16
+2025-10,tst jack brown's joint -,35.81,0.00,35.81
+2025-10,sp shirtinabox-us,35.21,0.00,35.21
+2025-10,supabase,0.00,34.34,34.34
+2025-10,tst crazy wings - lincol,33.84,0.00,33.84
+2025-10,sq 301 river lot,0.00,31.75,31.75
+2025-10,par tee golf,26.80,0.00,26.80
+2025-10,sycamore golf club,26.43,0.00,26.43
+2025-10,ck oak hills golf clu,25.34,0.00,25.34
+2025-10,max,25.09,0.00,25.09
+2025-11,motel 6 atlanta,0.00,520.88,520.88
+2025-11,microsoft#g,0.00,384.55,384.55
+2025-11,amia.org,330.24,0.00,330.24
+2025-11,wwwintegri wwwintegri st-j7j2f9k1n8s7 web id:,309.57,0.00,309.57
+2025-11,chase,305.81,0.00,305.81
+2025-11,rent,1676.94,1837.71,160.77
+2025-11,publix,35.04,143.69,108.65
+2025-11,google cloud,0.00,99.46,99.46
+2025-11,creem.io,93.75,0.00,93.75
+2025-11,verifyvend855-,0.00,88.80,88.80
+2025-11,seatgeek tickets,20.37,83.94,63.57
+2025-11,github,0.00,49.42,49.42
+2025-11,digitalocean,0.00,41.87,41.87
+2025-11,airgarage parking,0.00,37.50,37.50
+2025-11,armk fenway concession,36.26,0.00,36.26
+2025-11,wegmans,0.00,35.35,35.35
+2025-11,tst crazy wings - lincol,34.58,0.00,34.58
+2025-11,tst jakes on devine,33.97,0.00,33.97
+2025-11,sp shirtinabox-us,32.12,0.00,32.12
+2025-11,76 - m &amp; a mart &amp; gas,0.00,27.35,27.35
+2025-12,wp wordpress yl v1z,0.00,544.32,544.32
+2025-12,nanonoble pte.,0.00,125.00,125.00
+2025-12,www.supreme.com,0.00,124.24,124.24
+2025-12,dicks sporting goods,0.00,104.54,104.54
+2025-12,sqsp inv,100.25,0.00,100.25
+2025-12,amia.org,96.90,0.00,96.90
+2025-12,digitalocean,0.00,58.76,58.76
+2025-12,fsp steel hands brewing c,0.00,53.50,53.50
+2025-12,publix,29.07,76.30,47.23
+2025-12,sp shopcookingwithkarl,0.00,46.95,46.95
+2025-12,rent,1754.57,1793.17,38.60
+2025-12,marathon,0.00,38.04,38.04
+2025-12,supabase,0.00,34.35,34.35
+2025-12,exxonmobil,0.00,34.20,34.20
+2025-12,seatgeek tickets,33.19,0.00,33.19
+2025-12,circle k #,0.00,33.07,33.07
+2025-12,sq carolina barber shop,0.00,32.50,32.50
+2025-12,hairzoo - east rochester,32.24,0.00,32.24
+2025-12,sheetz,0.00,32.05,32.05
+2025-12,blue heron golf course,31.23,0.00,31.23
+2026-01,publix,47.89,212.43,164.54
+2026-01,google cloud,34.36,189.14,154.78
+2026-01,amia.org,90.06,0.00,90.06
+2026-01,digitalocean,0.00,64.20,64.20
+2026-01,cvs pharmacy,22.94,84.62,61.68
+2026-01,microsoft-g,0.00,56.67,56.67
+2026-01,primanti bros oakland,0.00,48.49,48.49
+2026-01,ls greens beverages,45.95,0.00,45.95
+2026-01,exxonmobil,28.59,71.67,43.08
+2026-01,supabase,0.00,34.97,34.97
+2026-01,tst jakes on devine,34.45,0.00,34.45
+2026-01,circle k #,32.28,0.00,32.28
+2026-01,target,32.12,0.00,32.12
+2026-01,bp,0.00,31.59,31.59
+2026-01,grubhub,31.55,0.00,31.55
+2026-01,tst crazy wings - lincol,30.90,0.00,30.90
+2026-01,motel 6 atlanta,28.94,0.00,28.94
+2026-01,marathon,28.14,0.00,28.14
+2026-01,speedway,27.49,0.00,27.49
+2026-01,mta nyct paygo,25.54,0.00,25.54

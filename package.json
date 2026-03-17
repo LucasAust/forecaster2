@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "forecast:audit": "npx tsx scripts/audit-forecast.ts",
+    "forecast:audit:real": "npx tsx scripts/audit-forecast-real.ts",
+    "forecast:optimize": "npx tsx scripts/optimize-forecast-calibration.ts",
+    "forecast:deepdive": "npx tsx scripts/forecast-deep-dive.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

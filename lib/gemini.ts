@@ -3,6 +3,7 @@ import type { Transaction, Forecast, AISuggestion, ChatMessage, ClarificationQue
 import {
     generateDeterministicForecast,
     validateForecast,
+    buildFinancialProfile,
 } from "./forecast-engine";
 
 /** Singleton — reuse across requests in the same process */
@@ -12,6 +13,65 @@ function getGenAI(): GoogleGenerativeAI {
     if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
     if (!_genAI) _genAI = new GoogleGenerativeAI(apiKey);
     return _genAI;
+}
+
+const ALLOWED_CLARIFICATION_CATEGORIES = new Set([
+    "Food & Drink", "Shopping", "Travel", "Housing", "Utilities", "Transportation",
+    "Health & Wellness", "Entertainment", "Subscriptions", "Transfer", "Income",
+    "Business Services", "Personal Care", "Gifts & Donations", "Other",
+]);
+
+function sanitizeClarificationQuestions(
+    questions: ClarificationQuestion[] | undefined,
+    sampleById: Map<string, { name: string; amount: number; date: string }>
+): ClarificationQuestion[] {
+    if (!Array.isArray(questions)) return [];
+
+    const deduped = new Set<string>();
+    const sanitized: ClarificationQuestion[] = [];
+
+    for (const q of questions) {
+        const id = typeof q?.transaction_id === "string" ? q.transaction_id.trim() : "";
+        if (!id || deduped.has(id)) continue;
+
+        const fallback = sampleById.get(id);
+        const txName = (q?.transaction_name || fallback?.name || "Transaction").trim();
+        const amount = typeof q?.amount === "number" && Number.isFinite(q.amount)
+            ? q.amount
+            : (fallback?.amount ?? 0);
+        const date = (q?.date || fallback?.date || "").trim();
+
+        const pairs = (q?.options || [])
+            .map((option, idx) => ({
+                option: (option || "").trim(),
+                category: (q?.category_mappings?.[idx] || "").trim(),
+            }))
+            .filter((pair) => pair.option.length > 0)
+            .map((pair) => ({
+                option: pair.option,
+                category: ALLOWED_CLARIFICATION_CATEGORIES.has(pair.category) ? pair.category : "Other",
+            }))
+            .slice(0, 4);
+
+        if (pairs.length < 3) continue;
+
+        const questionText = (q?.question || "").trim() || `How should we categorize ${txName}?`;
+
+        sanitized.push({
+            transaction_id: id,
+            transaction_name: txName,
+            amount,
+            date,
+            question: questionText,
+            options: pairs.map((pair) => pair.option),
+            category_mappings: pairs.map((pair) => pair.category),
+        });
+
+        deduped.add(id);
+        if (sanitized.length >= 5) break;
+    }
+
+    return sanitized;
 }
 
 export const geminiClient = {
@@ -49,6 +109,7 @@ export const geminiClient = {
             date: t.date,
             category: Array.isArray(t.category) ? t.category[0] : t.category,
         }));
+        const sampleById = new Map(sample.map((s) => [s.id, { name: s.name || "Transaction", amount: s.amount, date: s.date }]));
 
         const prompt = `
 You are a financial data analyst helping a budgeting app categorize transactions accurately.
@@ -96,10 +157,7 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
             const result = await model.generateContent(prompt);
             const text = result.response.text();
             const parsed = JSON.parse(text) as { questions: ClarificationQuestion[] };
-            // Enforce max 5, ensure arrays are parallel
-            const safe = (parsed.questions || [])
-                .filter(q => q.options?.length > 0 && q.options.length === q.category_mappings?.length)
-                .slice(0, 5);
+            const safe = sanitizeClarificationQuestions(parsed.questions, sampleById);
             return { questions: safe };
         } catch (error) {
             console.error("Gemini Clarification Error:", error);
@@ -107,10 +165,74 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
         }
     },
 
-    generateForecast: async (history: Transaction[]): Promise<Forecast> => {
-        // Generate the full forecast deterministically — no LLM needed
-        const forecast = generateDeterministicForecast(history);
-        return validateForecast(forecast);
+    generateForecast: async (history: Transaction[], useGeminiRefinement: boolean = true): Promise<Forecast> => {
+        // Generate the deterministic baseline forecast first
+        const baseForecast = generateDeterministicForecast(history);
+        
+        // If Gemini refinement is disabled or API key not set, return deterministic forecast
+        if (!useGeminiRefinement || !process.env.GEMINI_API_KEY) {
+            return validateForecast(baseForecast);
+        }
+
+        try {
+            const genAI = getGenAI();
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.0-flash",
+                generationConfig: {
+                    temperature: 0,
+                    responseMimeType: "application/json",
+                },
+            });
+
+            // Build financial profile summary for Gemini analysis
+            const profile = buildFinancialProfileSummary(history);
+            const baseline = summarizeBaselineForecast(baseForecast);
+
+            const prompt = `Analyze this financial data and provide monthly adjustment factors for the next 3 months.
+
+Monthly expenses (last 12): [${profile.monthlyExpenses.join(', ')}]
+Monthly income (last 12): [${profile.monthlyIncome.join(', ')}]
+Detected recurring expenses: ${profile.recurringExpenseSummary}
+Current deterministic forecast: $${baseline.monthlyExpenses.toFixed(0)}/mo expenses, $${baseline.monthlyIncome.toFixed(0)}/mo income
+
+Analyze the spending trend and income pattern. Consider:
+- Is there a clear trend in expenses (increasing/decreasing/stable)?
+- How predictable is the income pattern?
+- Are there seasonal factors or regime changes visible?
+- Should monthly amounts be adjusted from the baseline?
+
+Return JSON with adjusted monthly targets for the next 3 months:
+{
+  "expense_multipliers": [month1_multiplier, month2_multiplier, month3_multiplier],
+  "income_targets": [month1_target, month2_target, month3_target],
+  "reasoning": "brief explanation of adjustments made"
+}
+
+Multipliers should be around 1.0 for no change, 0.8-1.2 for moderate adjustments.
+Income targets should be actual dollar amounts, not multipliers.`;
+
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const geminiResponse = JSON.parse(text) as {
+                expense_multipliers: number[];
+                income_targets: number[];
+                reasoning: string;
+            };
+
+            // Validate and apply Gemini's refinements
+            const refinedForecast = applyGeminiRefinements(
+                baseForecast,
+                geminiResponse,
+                baseline
+            );
+
+            console.log(`[Gemini Refinement] Applied adjustments: ${geminiResponse.reasoning}`);
+            return validateForecast(refinedForecast);
+
+        } catch (error) {
+            console.error("Gemini refinement failed, falling back to deterministic:", error);
+            return validateForecast(baseForecast);
+        }
     },
     generateSuggestions: async (history: Transaction[], forecast: Forecast): Promise<{ suggestions: AISuggestion[] }> => {
         const genAI = getGenAI();
@@ -209,3 +331,148 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
         }
     }
 };
+
+// Helper functions for Gemini refinement
+
+function buildFinancialProfileSummary(history: Transaction[]) {
+    const profile = buildFinancialProfile(history);
+    
+    // Group transactions by month to build 12-month history
+    const monthlyData = new Map<string, { income: number; expenses: number }>();
+    
+    // Use last 60 transactions for recent context, but build monthly totals from all history
+    const cleaned = history
+        .filter(tx => !tx.pending && typeof tx.amount === 'number' && tx.amount !== 0)
+        .sort((a, b) => a.date.localeCompare(b.date));
+        
+    for (const tx of cleaned) {
+        const month = tx.date.substring(0, 7); // YYYY-MM
+        if (!monthlyData.has(month)) {
+            monthlyData.set(month, { income: 0, expenses: 0 });
+        }
+        const data = monthlyData.get(month)!;
+        
+        // Convert to standard format: positive = income, negative = expense
+        const normalizedAmount = tx.amount * -1; // Flip Plaid convention
+        
+        if (normalizedAmount > 0) {
+            data.income += normalizedAmount;
+        } else {
+            data.expenses += Math.abs(normalizedAmount);
+        }
+    }
+    
+    // Get last 12 months of data
+    const months = [...monthlyData.keys()].sort().slice(-12);
+    const monthlyIncome = months.map(month => monthlyData.get(month)?.income || 0);
+    const monthlyExpenses = months.map(month => monthlyData.get(month)?.expenses || 0);
+    
+    // Summarize recurring expenses
+    const topRecurring = profile.recurring_series
+        .filter(series => series.type === "expense")
+        .sort((a, b) => Math.abs(b.recent_amount) - Math.abs(a.recent_amount))
+        .slice(0, 5)
+        .map(series => `${series.merchant} $${Math.abs(series.recent_amount).toFixed(0)}/${series.cadence}`)
+        .join(', ');
+        
+    return {
+        monthlyIncome,
+        monthlyExpenses,
+        recurringExpenseSummary: topRecurring || "No major recurring expenses detected"
+    };
+}
+
+function summarizeBaselineForecast(forecast: Forecast) {
+    const transactions = forecast.predicted_transactions;
+    const forecastDays = 90;
+    
+    const totalIncome = transactions
+        .filter(tx => tx.amount > 0)
+        .reduce((sum, tx) => sum + tx.amount, 0);
+    const totalExpenses = transactions
+        .filter(tx => tx.amount < 0)
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        
+    return {
+        monthlyIncome: (totalIncome / forecastDays) * 30, // Convert to monthly rate
+        monthlyExpenses: (totalExpenses / forecastDays) * 30
+    };
+}
+
+function applyGeminiRefinements(
+    baseForecast: Forecast, 
+    geminiResponse: { expense_multipliers: number[]; income_targets: number[]; reasoning: string },
+    baseline: { monthlyIncome: number; monthlyExpenses: number }
+): Forecast {
+    // Validate Gemini response
+    const { expense_multipliers, income_targets } = geminiResponse;
+    
+    if (!Array.isArray(expense_multipliers) || expense_multipliers.length !== 3 ||
+        !Array.isArray(income_targets) || income_targets.length !== 3) {
+        console.warn("Invalid Gemini response format, using baseline forecast");
+        return baseForecast;
+    }
+    
+    // Clamp multipliers to reasonable ranges to prevent extreme adjustments
+    const clampedExpenseMultipliers = expense_multipliers.map(m => 
+        Math.max(0.4, Math.min(2.5, m || 1.0))
+    );
+    const clampedIncomeTargets = income_targets.map(t => 
+        Math.max(0, Math.min(baseline.monthlyIncome * 3, t || baseline.monthlyIncome))
+    );
+    
+    // Group transactions by month
+    const txsByMonth = new Map<string, typeof baseForecast.predicted_transactions>();
+    for (const tx of baseForecast.predicted_transactions) {
+        const month = tx.date.substring(0, 7);
+        if (!txsByMonth.has(month)) {
+            txsByMonth.set(month, []);
+        }
+        txsByMonth.get(month)!.push(tx);
+    }
+    
+    // Apply adjustments month by month
+    const refinedTransactions = [];
+    const months = [...txsByMonth.keys()].sort();
+    
+    for (let i = 0; i < months.length; i++) {
+        const month = months[i];
+        const monthTxs = txsByMonth.get(month) || [];
+        const monthIndex = Math.min(i, 2); // Use last multiplier for any months beyond 3
+        
+        const expenseMultiplier = clampedExpenseMultipliers[monthIndex];
+        const incomeTarget = clampedIncomeTargets[monthIndex];
+        
+        // Calculate current monthly totals
+        const currentMonthlyIncome = monthTxs
+            .filter(tx => tx.amount > 0)
+            .reduce((sum, tx) => sum + tx.amount, 0);
+        const currentMonthlyExpenses = monthTxs
+            .filter(tx => tx.amount < 0)
+            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            
+        // Apply refinements
+        const incomeScale = currentMonthlyIncome > 0 ? incomeTarget / currentMonthlyIncome : 1;
+        
+        for (const tx of monthTxs) {
+            if (tx.amount > 0) {
+                // Scale income toward target
+                refinedTransactions.push({
+                    ...tx,
+                    amount: Math.round(tx.amount * incomeScale * 100) / 100
+                });
+            } else {
+                // Apply expense multiplier
+                refinedTransactions.push({
+                    ...tx,
+                    amount: Math.round(tx.amount * expenseMultiplier * 100) / 100
+                });
+            }
+        }
+    }
+    
+    return {
+        ...baseForecast,
+        predicted_transactions: refinedTransactions
+    };
+}

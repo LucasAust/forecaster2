@@ -85,7 +85,28 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             });
             if (!res.ok) return;
             const data = (await res.json()) as { questions: ClarificationQuestion[] };
-            if (data.questions?.length > 0) setPendingClarifications(data.questions.slice(0, 5));
+            const safeQuestions = (data.questions || [])
+                .filter((q) => typeof q?.question === 'string' && q.question.trim().length > 0)
+                .map((q) => {
+                    const pairs = (q.options || [])
+                        .map((option, idx) => ({
+                            option: (option || '').trim(),
+                            category: (q.category_mappings?.[idx] || '').trim(),
+                        }))
+                        .filter((pair) => pair.option.length > 0 && pair.category.length > 0)
+                        .slice(0, 4);
+                    return {
+                        ...q,
+                        question: q.question.trim(),
+                        transaction_name: (q.transaction_name || 'Transaction').trim(),
+                        options: pairs.map((pair) => pair.option),
+                        category_mappings: pairs.map((pair) => pair.category),
+                    };
+                })
+                .filter((q) => q.options.length >= 3 && q.options.length === q.category_mappings.length)
+                .slice(0, 5);
+
+            if (safeQuestions.length > 0) setPendingClarifications(safeQuestions);
         } catch (e) { console.error('fetchClarifications failed:', e); }
     }, []);
 

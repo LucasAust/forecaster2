@@ -18,6 +18,17 @@ export function TransactionClarificationModal() {
     if (total === 0 && !submitting && !done) return null;
 
     const currentQ = pendingClarifications[step];
+    const optionPairs = ((currentQ?.options || [])
+        .map((option, i) => ({
+            label: (option || "").trim(),
+            category: (currentQ?.category_mappings?.[i] || "").trim(),
+        }))
+        .filter((pair) => pair.label.length > 0 && pair.category.length > 0)
+        .slice(0, 4));
+
+    const questionText = currentQ?.question?.trim()
+        ? currentQ.question.trim()
+        : `How should we categorize ${currentQ?.transaction_name || "this transaction"}?`;
 
     const handleAnswer = async (category: string) => {
         if (!currentQ) return;
@@ -142,18 +153,18 @@ export function TransactionClarificationModal() {
 
                         {/* Question */}
                         <p className="mx-5 mt-4 text-white text-sm font-medium">
-                            {currentQ?.question}
+                            {questionText}
                         </p>
 
                         {/* Answer options */}
                         <div className="mx-5 mt-3 flex flex-col gap-2">
-                            {currentQ?.options.map((option, i) => (
+                            {optionPairs.map((pair, i) => (
                                 <button
                                     key={i}
-                                    onClick={() => handleAnswer(currentQ.category_mappings[i])}
+                                    onClick={() => handleAnswer(pair.category)}
                                     className="flex items-center justify-between w-full px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-left text-sm text-zinc-200 hover:text-white transition-all group"
                                 >
-                                    <span>{option}</span>
+                                    <span>{pair.label}</span>
                                     <ChevronRight className="h-3.5 w-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
                                 </button>
                             ))}
