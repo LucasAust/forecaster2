@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { plaidClient } from "@/lib/plaid";
+import { getPlaidClient } from "@/lib/plaid";
 
 export async function POST(request: Request) {
     const supabase = await createClient();
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
         // Remove from Plaid
         try {
-            await plaidClient.itemRemove({ access_token: item.access_token });
+            await getPlaidClient().itemRemove({ access_token: item.access_token });
         } catch {
             // Even if Plaid removal fails, still remove from our DB
             console.warn("Plaid itemRemove failed, proceeding with DB removal");

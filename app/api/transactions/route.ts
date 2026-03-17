@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { plaidClient } from '@/lib/plaid';
+import { getPlaidClient } from '@/lib/plaid';
 import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request: Request) {
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
                     let allRemoved: typeof firstPage.data.removed = [];
                     let hasMore = true;
 
-                    const firstPage = await plaidClient.transactionsSync({
+                    const firstPage = await getPlaidClient().transactionsSync({
                         access_token: accessToken,
                         cursor,
                         count: 500,
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
                     hasMore = firstPage.data.has_more;
 
                     while (hasMore) {
-                        const page = await plaidClient.transactionsSync({
+                        const page = await getPlaidClient().transactionsSync({
                             access_token: accessToken,
                             cursor,
                             count: 500,
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
                         .in('transaction_id', removedIds);
                 }
 
-                const accountsResponse = await plaidClient.accountsGet({
+                const accountsResponse = await getPlaidClient().accountsGet({
                     access_token: accessToken,
                 });
                 const newAccounts = accountsResponse.data.accounts;
@@ -170,7 +170,7 @@ export async function GET(request: Request) {
                         // Non-fatal error: still try to populate accounts_data so the UI
                         // doesn't wrongly show "connect a bank" when a bank IS connected.
                         try {
-                            const accountsResponse = await plaidClient.accountsGet({ access_token: item.access_token });
+                            const accountsResponse = await getPlaidClient().accountsGet({ access_token: item.access_token });
                             await supabase
                                 .from('plaid_items')
                                 .update({ accounts_data: accountsResponse.data.accounts })

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { plaidClient } from '@/lib/plaid';
+import { getPlaidClient } from '@/lib/plaid';
 
 
 import { createClient } from '@/utils/supabase/server';
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'public_token is required' }, { status: 400 });
         }
 
-        const response = await plaidClient.itemPublicTokenExchange({
+        const response = await getPlaidClient().itemPublicTokenExchange({
             public_token: public_token,
         });
         const { access_token, item_id } = response.data;

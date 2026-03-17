@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { plaidClient } from '@/lib/plaid';
+import { getPlaidClient } from '@/lib/plaid';
 import { Products, CountryCode } from 'plaid';
 
 import { createClient } from '@/utils/supabase/server';
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     try {
-        const response = await plaidClient.linkTokenCreate({
+        const response = await getPlaidClient().linkTokenCreate({
             user: { client_user_id: user.id },
             client_name: 'Arc Financial',
             products: [Products.Transactions],
