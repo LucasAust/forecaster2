@@ -16,7 +16,7 @@ export async function GET() {
     
     try {
         // Basic response with system information
-        const healthData = {
+        const healthData: Record<string, unknown> = {
             status: 'ok',
             version: process.env.npm_package_version || '0.1.0',
             timestamp,
