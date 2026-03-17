@@ -1844,7 +1844,13 @@ export function generateDeterministicForecast(
     const totalVariableIncome = allVariableIncome.reduce((s, tx) => s + tx.amount, 0);
 
     if (totalVariableIncome > 0 && variableIncomeTarget > 0) {
-        const scale = clamp(variableIncomeTarget / totalVariableIncome, 0.1, 2.0);
+        // For variable/freelance income, only scale DOWN (not up) to avoid inflating
+        // predictions in months where actual income may be very low. Salary-type
+        // income can scale up modestly since it's more predictable.
+        const maxUpScale = insightProfile?.income_type === "salary" ? 1.5
+            : insightProfile?.income_type === "freelance" ? 1.0
+            : 1.2;
+        const scale = clamp(variableIncomeTarget / totalVariableIncome, 0.1, maxUpScale);
         if (Math.abs(scale - 1) > 0.05) {
             allVariableIncome = allVariableIncome.map(tx => ({
                 ...tx,
