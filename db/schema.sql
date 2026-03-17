@@ -237,6 +237,25 @@ create table if not exists public.mfa_email_codes (
 create index if not exists idx_mfa_email_codes_user_id
   on public.mfa_email_codes (user_id, used, expires_at);
 
+-- =========================================================
+-- Performance Indexes
+-- =========================================================
+
+-- Transactions are frequently queried by user_id and ordered by date
+create index if not exists idx_transactions_user_date
+  on public.transactions (user_id, date desc);
+
+-- Forecasts and suggestions are frequently queried by user_id and creation time
+create index if not exists idx_forecasts_user_created
+  on public.forecasts (user_id, created_at desc);
+
+create index if not exists idx_ai_suggestions_user_updated
+  on public.ai_suggestions (user_id, updated_at desc);
+
+-- Plaid items are frequently looked up by user_id
+create index if not exists idx_plaid_items_user_id
+  on public.plaid_items (user_id);
+
 alter table public.mfa_email_codes enable row level security;
 
 DO $$ BEGIN
