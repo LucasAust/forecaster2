@@ -165,13 +165,13 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
         }
     },
 
-    generateForecast: async (history: Transaction[], useGeminiRefinement: boolean = true): Promise<Forecast> => {
+    generateForecast: async (history: Transaction[], useGeminiRefinement: boolean = true, referenceDate: Date = new Date()): Promise<Forecast> => {
         // Generate the deterministic baseline forecast first
-        const baseForecast = generateDeterministicForecast(history);
+        const baseForecast = generateDeterministicForecast(history, referenceDate);
         
         // If Gemini refinement is disabled or API key not set, return deterministic forecast
         if (!useGeminiRefinement || !process.env.GEMINI_API_KEY) {
-            return validateForecast(baseForecast);
+            return validateForecast(baseForecast, referenceDate);
         }
 
         try {
@@ -227,11 +227,11 @@ Income targets should be actual dollar amounts, not multipliers.`;
             );
 
             console.log(`[Gemini Refinement] Applied adjustments: ${geminiResponse.reasoning}`);
-            return validateForecast(refinedForecast);
+            return validateForecast(refinedForecast, referenceDate);
 
         } catch (error) {
             console.error("Gemini refinement failed, falling back to deterministic:", error);
-            return validateForecast(baseForecast);
+            return validateForecast(baseForecast, referenceDate);
         }
     },
     generateSuggestions: async (history: Transaction[], forecast: Forecast): Promise<{ suggestions: AISuggestion[] }> => {

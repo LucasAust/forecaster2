@@ -394,7 +394,7 @@ export async function runGeminiAudit(): Promise<GeminiAuditSummary> {
         
         if (process.env.GEMINI_API_KEY) {
             try {
-                const geminiForecast = await geminiClient.generateForecast(history, true);
+                const geminiForecast = await geminiClient.generateForecast(history, true, asOf);
                 geminiPredicted = monthlyTotalsForecast(geminiForecast, month);
                 forecastMethod = "gemini-enhanced";
                 geminiSuccesses++;
