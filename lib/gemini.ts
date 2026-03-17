@@ -165,9 +165,9 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
         }
     },
 
-    generateForecast: async (history: Transaction[], useGeminiRefinement: boolean = true, referenceDate: Date = new Date()): Promise<Forecast> => {
-        // Generate the deterministic baseline forecast first
-        const baseForecast = generateDeterministicForecast(history, referenceDate);
+    generateForecast: async (history: Transaction[], useGeminiRefinement: boolean = true, referenceDate: Date = new Date(), insightProfile?: import("./insight-questions").InsightProfile): Promise<Forecast> => {
+        // Generate the deterministic baseline forecast first, with user insights if available
+        const baseForecast = generateDeterministicForecast(history, referenceDate, insightProfile);
         
         // If Gemini refinement is disabled or API key not set, return deterministic forecast
         if (!useGeminiRefinement || !process.env.GEMINI_API_KEY) {
@@ -196,6 +196,9 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
                 return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
             });
 
+            // Add user insight context if available
+            const insightContext = insightProfile ? buildInsightContext(insightProfile) : "";
+
             const prompt = `You are a precise financial forecasting engine. Predict EXACT monthly dollar amounts.
 
 HISTORICAL MONTHLY EXPENSES (oldest to newest):
@@ -205,7 +208,7 @@ HISTORICAL MONTHLY INCOME (oldest to newest):
 [${profile.monthlyIncome.join(', ')}]
 
 KNOWN RECURRING EXPENSES: ${profile.recurringExpenseSummary}
-
+${insightContext ? `\nUSER-PROVIDED CONTEXT (from onboarding questions — trust these over historical patterns):\n${insightContext}\n` : ""}
 TASK: Predict total expenses and total income for each of the next 3 months: ${forecastMonthNames.join(', ')}.
 
 RULES:
@@ -483,4 +486,26 @@ function applyGeminiTargets(
         ...baseForecast,
         predicted_transactions: refinedTransactions,
     };
+}
+
+function buildInsightContext(profile: import("./insight-questions").InsightProfile): string {
+    const lines: string[] = [];
+    if (profile.income_type) {
+        lines.push(`- Income type: ${profile.income_type} (user-stated)`);
+    }
+    if (profile.expected_monthly_income) {
+        lines.push(`- Expected monthly income: $${profile.expected_monthly_income.toLocaleString()} (user-stated — use this as your income prediction target)`);
+    }
+    if (profile.expected_monthly_expenses) {
+        lines.push(`- Expected monthly expenses: $${profile.expected_monthly_expenses.toLocaleString()} (user-stated — use this as your expense prediction target)`);
+    }
+    if (profile.regime_change_confirmed) {
+        lines.push(`- User confirmed their spending recently changed permanently — weight recent months heavily, ignore older spending levels`);
+    }
+    if (profile.spending_anchor === "recent") {
+        lines.push(`- User says their recent spending pattern is more representative than historical average`);
+    } else if (profile.spending_anchor === "historical") {
+        lines.push(`- User says recent spending spikes are temporary — historical average is more representative`);
+    }
+    return lines.join("\n");
 }

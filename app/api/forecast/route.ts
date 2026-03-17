@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { geminiClient } from '@/lib/gemini';
 import { createClient } from '@/utils/supabase/server';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { buildInsightProfile } from '@/lib/insight-questions';
 import type { Transaction } from '@/types';
+import type { InsightAnswer } from '@/lib/insight-questions';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -77,7 +79,16 @@ export async function POST(request: Request) {
             );
         }
 
-        const forecast = await geminiClient.generateForecast(safeHistory, useGeminiRefinement !== false);
+        // Load user's insight answers to improve forecast accuracy
+        const { data: insightAnswerRows } = await supabase
+            .from('insight_answers')
+            .select('question_id, value, answered_at')
+            .eq('user_id', user.id);
+        const insightProfile = insightAnswerRows && insightAnswerRows.length > 0
+            ? buildInsightProfile(insightAnswerRows as InsightAnswer[])
+            : undefined;
+
+        const forecast = await geminiClient.generateForecast(safeHistory, useGeminiRefinement !== false, new Date(), insightProfile);
 
         // Save to Supabase
         await supabase.from('forecasts').insert({

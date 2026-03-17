@@ -1651,6 +1651,27 @@ function calcMonthlyAverages(txs: CleanTransaction[]) {
     };
 }
 
+/**
+ * Calculate average monthly expenses from only the most recent N months.
+ * Used when user confirms a regime change (spending_anchor = "recent").
+ */
+function calcRecentMonthlyExpenses(txs: CleanTransaction[], referenceDate: Date, monthCount: number): number {
+    const filtered = txs.filter(tx => tx.category !== "Transfer" && !isNoiseMerchant(tx.merchant));
+    const byMonth = new Map<string, number>();
+    for (const tx of filtered) {
+        if (tx.amount >= 0) continue; // expenses only
+        const key = tx.date.substring(0, 7);
+        byMonth.set(key, (byMonth.get(key) || 0) + Math.abs(tx.amount));
+    }
+    const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // Take last N full months (skip current partial month)
+    const refMonth = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}`;
+    const full = months.filter(([m]) => m < refMonth);
+    const recent = full.slice(-monthCount);
+    if (recent.length === 0) return 0;
+    return recent.reduce((s, [, v]) => s + v, 0) / recent.length;
+}
+
 // ─── Public: Financial Profile (for optional AI refinement) ─
 
 export interface FinancialProfile {
@@ -1722,7 +1743,8 @@ export function buildFinancialProfile(
  */
 export function generateDeterministicForecast(
     rawTransactions: Transaction[],
-    referenceDate: Date = new Date()
+    referenceDate: Date = new Date(),
+    insightProfile?: import("./insight-questions").InsightProfile
 ): Forecast {
     const today = referenceDate;
     const start = addDays(today, 1);
@@ -1780,8 +1802,14 @@ export function generateDeterministicForecast(
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     const totalPredictedExpenses = recurringExpenseTotal + discretionaryExpenseTotal;
 
-    // Target: historical monthly expenses × 3 months (90-day window)
-    const targetTotalExpenses = monthlyAvg.total_expenses * forecastMonths;
+    // Target: user-stated expectation (from insight questions) OR historical average
+    // If user told us their expected monthly spend, trust that over history
+    const monthlyExpenseTarget = insightProfile?.expected_monthly_expenses
+        ? insightProfile.expected_monthly_expenses
+        : insightProfile?.spending_anchor === "recent"
+            ? calcRecentMonthlyExpenses(cleaned, today, 3)
+            : monthlyAvg.total_expenses;
+    const targetTotalExpenses = monthlyExpenseTarget * forecastMonths;
 
     // TOP-DOWN calibration: scale ALL expenses (recurring + discretionary) to match
     // historical monthly totals. Bottom-up detection consistently misses bills,
@@ -1803,8 +1831,12 @@ export function generateDeterministicForecast(
         .filter(tx => tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0);
 
-    // Target: median monthly income × 3 months, with 10% conservative haircut
-    const targetTotalIncome = monthlyAvg.total_income * forecastMonths * 0.9;
+    // Target: user-stated expectation OR median monthly income × 3 months
+    const monthlyIncomeTarget = insightProfile?.expected_monthly_income
+        ? insightProfile.expected_monthly_income
+        : monthlyAvg.total_income;
+    const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
+    const targetTotalIncome = monthlyIncomeTarget * forecastMonths * incomeHaircut;
     const variableIncomeTarget = Math.max(0, targetTotalIncome - recurringIncomeTotal);
 
     // Combine variable + lumpy income

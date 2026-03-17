@@ -235,6 +235,10 @@ export interface MfaFactor {
     updated_at: string;
 }
 
+// ─── Insight Question Types ────────────────────────────────
+
+export type { InsightQuestion, InsightOption, InsightAnswer, InsightProfile } from "@/lib/insight-questions";
+
 // ─── Transaction Clarification Types ───────────────────────
 
 export interface ClarificationQuestion {

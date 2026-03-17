@@ -8,6 +8,7 @@ import { PreferencesProvider } from "@/contexts/PreferencesContext";
 import { AlertEngine } from "@/components/AlertEngine";
 import { NotificationBell } from "@/components/NotificationBell";
 import { TransactionClarificationModal } from "@/components/TransactionClarificationModal";
+import { InsightQuestionsModal } from "@/components/InsightQuestionsModal";
 
 export default function DashboardLayout({
     children,
@@ -23,6 +24,8 @@ export default function DashboardLayout({
                 <AlertEngine />
                 {/* Clarification modal — shown automatically after a fresh bank connection */}
                 <TransactionClarificationModal />
+                {/* Insight questions — data-driven questions to improve forecast accuracy */}
+                <InsightQuestionsModal />
                 <div className="flex min-h-screen">
                     {/* Desktop sidebar — hidden on mobile */}
                     <div className="hidden md:block">
