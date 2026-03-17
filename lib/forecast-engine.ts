@@ -101,6 +101,15 @@ const NOISE_MERCHANT_PATTERNS = [
     /cc\s*payment/i,
     /card\s*payment/i,
     /loan\s*payment/i,
+    // Internal transfers that look like income but aren't
+    /transfer\s*from\s*(chk|sav|checking|savings)/i,
+    /online\s*(realtime\s*)?transfer\s*(from|to)/i,
+    /remote\s*online\s*deposit/i,
+    /moneylink/i,               // Schwab MoneyLink transfers
+    /^(schwab|fidelity|vanguard|etrade)\b/i, // Brokerage transfers
+    // Note: Venmo/PayPal/CashApp cashouts are kept as income — for freelancers,
+    // these are how gig payments arrive at the bank. Only filter true internal
+    // transfers (bank-to-bank, brokerage moves).
 ];
 
 /**
@@ -1672,6 +1681,84 @@ function calcRecentMonthlyExpenses(txs: CleanTransaction[], referenceDate: Date,
     return recent.reduce((s, [, v]) => s + v, 0) / recent.length;
 }
 
+/**
+ * Build seasonal income targets for the 3 forecast months.
+ * 
+ * Strategy: blend three signals for each forecast month:
+ *  1. Same-month historical average (seasonality)
+ *  2. Same-quarter historical average (quarterly pattern)
+ *  3. Overall median (baseline)
+ * 
+ * Weights: 40% seasonal, 30% quarterly, 30% baseline
+ * This captures patterns like "March is always high" and "Q3 is strong"
+ * while staying grounded in the overall median.
+ */
+function calcSeasonalIncomeTargets(
+    txs: CleanTransaction[],
+    referenceDate: Date,
+    forecastMonths: number = 3
+): number[] {
+    const filtered = txs.filter(tx => tx.category !== "Transfer" && !isNoiseMerchant(tx.merchant));
+    
+    // Build monthly income totals
+    const byYearMonth = new Map<string, number>();
+    for (const tx of filtered) {
+        if (tx.amount <= 0) continue; // income only
+        const key = tx.date.substring(0, 7);
+        byYearMonth.set(key, (byYearMonth.get(key) || 0) + tx.amount);
+    }
+    
+    const allMonthlyIncomes = [...byYearMonth.values()];
+    if (allMonthlyIncomes.length < 3) {
+        const med = allMonthlyIncomes.length > 0 ? median(allMonthlyIncomes) : 0;
+        return Array(forecastMonths).fill(med);
+    }
+    
+    const overallMedian = median(allMonthlyIncomes);
+    
+    // Group by calendar month (1-12) for seasonality
+    const byCalendarMonth = new Map<number, number[]>();
+    for (const [ym, amount] of byYearMonth) {
+        const m = parseInt(ym.split("-")[1], 10);
+        if (!byCalendarMonth.has(m)) byCalendarMonth.set(m, []);
+        byCalendarMonth.get(m)!.push(amount);
+    }
+    
+    // Group by quarter for quarterly patterns
+    const byQuarter = new Map<number, number[]>();
+    for (const [ym, amount] of byYearMonth) {
+        const m = parseInt(ym.split("-")[1], 10);
+        const q = Math.ceil(m / 3);
+        if (!byQuarter.has(q)) byQuarter.set(q, []);
+        byQuarter.get(q)!.push(amount);
+    }
+    
+    const targets: number[] = [];
+    for (let i = 1; i <= forecastMonths; i++) {
+        const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + i, 1);
+        const calMonth = d.getMonth() + 1;
+        const quarter = Math.ceil(calMonth / 3);
+        
+        // Same calendar month average
+        const sameMonthVals = byCalendarMonth.get(calMonth) || [];
+        const seasonalAvg = sameMonthVals.length > 0
+            ? sameMonthVals.reduce((a, b) => a + b, 0) / sameMonthVals.length
+            : overallMedian;
+        
+        // Same quarter average (monthly rate)
+        const sameQuarterVals = byQuarter.get(quarter) || [];
+        const quarterlyAvg = sameQuarterVals.length > 0
+            ? sameQuarterVals.reduce((a, b) => a + b, 0) / sameQuarterVals.length
+            : overallMedian;
+        
+        // Blend: 40% seasonal, 30% quarterly, 30% baseline
+        const blended = seasonalAvg * 0.4 + quarterlyAvg * 0.3 + overallMedian * 0.3;
+        targets.push(roundTo(blended, 2));
+    }
+    
+    return targets;
+}
+
 // ─── Public: Financial Profile (for optional AI refinement) ─
 
 export interface FinancialProfile {
@@ -1826,37 +1913,77 @@ export function generateDeterministicForecast(
         }
     }
 
-    // ── Income calibration ────
+    // ── Income calibration (multi-horizon) ────
+    // Use multi-horizon model that blends weekly, monthly, quarterly, and yearly
+    // signals for per-month income targets. Falls back to user-stated expectation
+    // if provided via insight questions.
+    const { predictMultiHorizonIncome } = require("./multi-horizon-income");
+    const multiHorizonResults = predictMultiHorizonIncome(rawTransactions, today, forecastMonths) as Array<{target: number; confidence: string}>;
+    const multiHorizonTargets = multiHorizonResults.map(t => t.target);
+    const multiHorizonConfidence = multiHorizonResults.map(t => t.confidence);
+    
+    const seasonalIncomeTargets = insightProfile?.expected_monthly_income
+        ? Array(forecastMonths).fill(insightProfile.expected_monthly_income)
+        : multiHorizonTargets;
+    
+    const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
+    const targetTotalIncome = seasonalIncomeTargets.reduce((a: number, b: number) => a + b, 0) * incomeHaircut;
+
     const recurringIncomeTotal = recurringTxs
         .filter(tx => tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0);
-
-    // Target: user-stated expectation OR median monthly income × 3 months
-    const monthlyIncomeTarget = insightProfile?.expected_monthly_income
-        ? insightProfile.expected_monthly_income
-        : monthlyAvg.total_income;
-    const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
-    const targetTotalIncome = monthlyIncomeTarget * forecastMonths * incomeHaircut;
     const variableIncomeTarget = Math.max(0, targetTotalIncome - recurringIncomeTotal);
 
     // Combine variable + lumpy income
     let allVariableIncome = [...variableIncomeTxs, ...lumpyIncomeTxs];
     const totalVariableIncome = allVariableIncome.reduce((s, tx) => s + tx.amount, 0);
 
-    if (totalVariableIncome > 0 && variableIncomeTarget > 0) {
-        // For variable/freelance income, only scale DOWN (not up) to avoid inflating
-        // predictions in months where actual income may be very low. Salary-type
-        // income can scale up modestly since it's more predictable.
-        const maxUpScale = insightProfile?.income_type === "salary" ? 1.5
-            : insightProfile?.income_type === "freelance" ? 1.0
-            : 1.2;
-        const scale = clamp(variableIncomeTarget / totalVariableIncome, 0.1, maxUpScale);
-        if (Math.abs(scale - 1) > 0.05) {
-            allVariableIncome = allVariableIncome.map(tx => ({
-                ...tx,
-                amount: roundTo(tx.amount * scale, 2),
-            }));
+    // Per-month income calibration using multi-horizon targets.
+    // Instead of scaling all variable income uniformly, scale each month
+    // independently to hit its specific target. This handles seasonal
+    // variations where Q4 income is naturally lower than Q2.
+    {
+        const incomeByMonth = new Map<string, PredictedTransaction[]>();
+        for (const tx of allVariableIncome) {
+            const m = tx.date.substring(0, 7);
+            if (!incomeByMonth.has(m)) incomeByMonth.set(m, []);
+            incomeByMonth.get(m)!.push(tx);
         }
+
+        const recurringIncomeByMonth = new Map<string, number>();
+        for (const tx of recurringTxs) {
+            if (tx.amount <= 0) continue;
+            const m = tx.date.substring(0, 7);
+            recurringIncomeByMonth.set(m, (recurringIncomeByMonth.get(m) || 0) + tx.amount);
+        }
+
+        const maxUpScale = insightProfile?.income_type === "salary" ? 1.5 : 1.4;
+        const scaledVariableIncome: PredictedTransaction[] = [];
+
+        // Get sorted forecast months
+        const fMonths = [...incomeByMonth.keys()].sort();
+        for (let i = 0; i < fMonths.length; i++) {
+            const month = fMonths[i];
+            const monthTxs = incomeByMonth.get(month) || [];
+            const monthIdx = Math.min(i, seasonalIncomeTargets.length - 1);
+            const monthTarget = (seasonalIncomeTargets[monthIdx] || 0) * incomeHaircut;
+            const recurringInMonth = recurringIncomeByMonth.get(month) || 0;
+            const variableTarget = Math.max(0, monthTarget - recurringInMonth);
+            const variableActual = monthTxs.reduce((s, tx) => s + tx.amount, 0);
+
+            if (variableActual > 0 && variableTarget > 0) {
+                const scale = clamp(variableTarget / variableActual, 0.1, maxUpScale);
+                for (const tx of monthTxs) {
+                    scaledVariableIncome.push({
+                        ...tx,
+                        amount: roundTo(tx.amount * scale, 2),
+                    });
+                }
+            } else {
+                scaledVariableIncome.push(...monthTxs);
+            }
+        }
+        allVariableIncome = scaledVariableIncome;
     }
 
     // Merge and sort

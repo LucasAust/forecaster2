@@ -149,6 +149,14 @@ const scenarios: { name: string; profile: InsightProfile | undefined }[] = [
         profile: { regime_change_confirmed: true, spending_anchor: "recent", expected_monthly_income: 3000, expected_monthly_expenses: 3000, income_type: "freelance" },
     },
     {
+        name: "Recent anchor + income $1800 + expenses $3000 (freelance)",
+        profile: { regime_change_confirmed: true, spending_anchor: "recent", expected_monthly_income: 1800, expected_monthly_expenses: 3000, income_type: "freelance" },
+    },
+    {
+        name: "Recent anchor + expenses $3000 (no income override)",
+        profile: { regime_change_confirmed: true, spending_anchor: "recent", expected_monthly_expenses: 3000, income_type: "freelance" },
+    },
+    {
         name: "Historical anchor (temporary spike)",
         profile: { regime_change_confirmed: false, spending_anchor: "historical" },
     },
