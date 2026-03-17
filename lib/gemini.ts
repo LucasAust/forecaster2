@@ -195,21 +195,25 @@ Monthly income (last 12): [${profile.monthlyIncome.join(', ')}]
 Detected recurring expenses: ${profile.recurringExpenseSummary}
 Current deterministic forecast: $${baseline.monthlyExpenses.toFixed(0)}/mo expenses, $${baseline.monthlyIncome.toFixed(0)}/mo income
 
-Analyze the spending trend and income pattern. Consider:
-- Is there a clear trend in expenses (increasing/decreasing/stable)?
-- How predictable is the income pattern?
-- Are there seasonal factors or regime changes visible?
-- Should monthly amounts be adjusted from the baseline?
+You are a financial forecasting calibration engine. Your job is to correct the deterministic forecast based on trends in the data.
 
-Return JSON with adjusted monthly targets for the next 3 months:
+Look at the RECENT TREND in monthly expenses (last 3-4 months vs earlier months). If spending is trending up or down, adjust the multiplier accordingly. If stable and close to baseline, keep near 1.0.
+
+For income: compute the MEDIAN of all monthly income values, ignoring the top 1-2 outliers (e.g., one-time $10K deposits). Use that median as the income target for all 3 months.
+
+Return JSON:
 {
   "expense_multipliers": [month1_multiplier, month2_multiplier, month3_multiplier],
-  "income_targets": [month1_target, month2_target, month3_target],
-  "reasoning": "brief explanation of adjustments made"
+  "income_targets": [month1_dollar_target, month2_dollar_target, month3_dollar_target],
+  "reasoning": "brief explanation"
 }
 
-Multipliers should be around 1.0 for no change, 0.8-1.2 for moderate adjustments.
-Income targets should be actual dollar amounts, not multipliers.`;
+Multiplier guidelines:
+- 1.0 = no change from baseline
+- 1.1-1.5 = moderate upward adjustment (recent spending higher than baseline)
+- 0.7-0.9 = moderate downward adjustment
+- Only use >1.5 or <0.7 if there's a VERY clear regime change in the data
+Income targets are actual dollar amounts per month.`;
 
             const result = await model.generateContent(prompt);
             const text = result.response.text();
@@ -414,8 +418,9 @@ function applyGeminiRefinements(
     }
     
     // Clamp multipliers to reasonable ranges to prevent extreme adjustments
+    // Tighter clamp on expense multipliers — Gemini tends to over-adjust
     const clampedExpenseMultipliers = expense_multipliers.map(m => 
-        Math.max(0.4, Math.min(2.5, m || 1.0))
+        Math.max(0.7, Math.min(1.8, m || 1.0))
     );
     const clampedIncomeTargets = income_targets.map(t => 
         Math.max(0, Math.min(baseline.monthlyIncome * 3, t || baseline.monthlyIncome))
@@ -462,11 +467,10 @@ function applyGeminiRefinements(
                     amount: Math.round(tx.amount * incomeScale * 100) / 100
                 });
             } else {
-                // Apply expense multiplier
-                refinedTransactions.push({
-                    ...tx,
-                    amount: Math.round(tx.amount * expenseMultiplier * 100) / 100
-                });
+                // Keep expenses at deterministic baseline — Gemini expense adjustments
+                // have mixed results and often make things worse. The deterministic
+                // calibration already targets historical averages.
+                refinedTransactions.push({ ...tx });
             }
         }
     }
