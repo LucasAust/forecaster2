@@ -1783,21 +1783,22 @@ export function generateDeterministicForecast(
     // Target: historical monthly expenses × 3 months (90-day window)
     const targetTotalExpenses = monthlyAvg.total_expenses * forecastMonths;
 
-    // Always calibrate discretionary expenses to match historical totals
-    if (targetTotalExpenses > 0 && discretionaryExpenseTotal > 0) {
-        const targetDiscretionary = Math.max(0, targetTotalExpenses - recurringExpenseTotal);
-        const expenseScale = clamp(targetDiscretionary / discretionaryExpenseTotal, 0.3, 3.0);
-        for (const tx of discretionaryTxs) {
-            if (tx.amount < 0) {
-                tx.amount = roundTo(tx.amount * expenseScale, 2);
+    // TOP-DOWN calibration: scale ALL expenses (recurring + discretionary) to match
+    // historical monthly totals. Bottom-up detection consistently misses bills,
+    // so the total forecast needs to be pulled toward the historical average.
+    if (targetTotalExpenses > 0 && totalPredictedExpenses > 0) {
+        const expenseScale = clamp(targetTotalExpenses / totalPredictedExpenses, 0.4, 3.5);
+        if (Math.abs(expenseScale - 1) > 0.03) {
+            for (const tx of recurringTxs) {
+                if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
+            }
+            for (const tx of discretionaryTxs) {
+                if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
             }
         }
     }
 
-    // ── Income calibration: scale variable income to historical median ────
-    // The variable income system over-projects when history has outlier months.
-    // Use MEDIAN monthly income (not average) as the calibration target — this
-    // is robust to shock months ($10K check deposits, tax refunds, etc.).
+    // ── Income calibration ────
     const recurringIncomeTotal = recurringTxs
         .filter(tx => tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0);
