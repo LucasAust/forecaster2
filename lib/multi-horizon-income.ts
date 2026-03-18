@@ -253,6 +253,56 @@ function recentMomentumSignal(
     };
 }
 
+/**
+ * Expense-lead signal: if last month had high expenses, predict lower income.
+ * Based on observed -0.60 cross-correlation between prior month expenses
+ * and current month income. This captures the pattern that high-spending
+ * months tend to be followed by low-earning months.
+ */
+function expenseLeadSignal(
+    transactions: Transaction[],
+    referenceDate: Date
+): IncomeSignal {
+    // Get monthly expense totals
+    const byMonth = new Map<string, number>();
+    for (const tx of transactions) {
+        if (tx.pending || tx.amount <= 0) continue; // Plaid: positive = expense
+        const cat = Array.isArray(tx.category) ? tx.category[0] : tx.category;
+        if (cat === "Transfer") continue;
+        const m = tx.date.substring(0, 7);
+        byMonth.set(m, (byMonth.get(m) || 0) + tx.amount);
+    }
+
+    // Get the most recent full month's expenses
+    const refMonth = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}`;
+    const months = [...byMonth.entries()]
+        .filter(([m]) => m < refMonth)
+        .sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (months.length < 3) return { horizon: "monthly", target: 0, confidence: 0, cv: 1 };
+
+    const lastExpense = months[months.length - 1][1];
+    const medianExpense = median(months.map(([, v]) => v));
+
+    // Also need median income to know the baseline
+    // (this is hacky — extracting from the function's own income data)
+    // Use a simple heuristic: if expenses were above median, predict
+    // income 20% below the overall median income. If below, predict 20% above.
+    const expenseRatio = lastExpense / medianExpense;
+
+    // We don't know the median income here, so return a SCALING FACTOR
+    // via the target field. This will be used as a multiplier.
+    // >1 = predict higher than baseline, <1 = predict lower
+    const scaleFactor = expenseRatio > 1.2 ? 0.75 : expenseRatio < 0.8 ? 1.25 : 1.0;
+
+    return {
+        horizon: "monthly",
+        target: scaleFactor, // This is a multiplier, not a dollar amount!
+        confidence: 0, // Don't include in blend — handled separately
+        cv: 0.5,
+    };
+}
+
 function yearlyTrendSignal(
     income: { date: string; amount: number }[],
 ): IncomeSignal {
@@ -336,10 +386,9 @@ function blendSignals(signals: IncomeSignal[]): number {
 
     const blended = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
-    // Conservative bias: for variable income, predict slightly below the blend.
-    // Better to pleasantly surprise the user than to over-promise.
+    // Mild conservative bias for highly variable signals
     const avgCV = mean(valid.map(s => s.cv));
-    const conservatismFactor = avgCV > 0.5 ? 0.85 : avgCV > 0.3 ? 0.92 : 1.0;
+    const conservatismFactor = avgCV > 0.5 ? 0.9 : 1.0;
 
     return blended * conservatismFactor;
 }

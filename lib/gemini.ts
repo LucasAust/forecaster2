@@ -460,11 +460,17 @@ function applyGeminiTargets(
             .reduce((sum, tx) => sum + tx.amount, 0);
 
         // Keep expenses at deterministic level — Gemini expense predictions are
-        // consistently unreliable (over-predicts early months, mixed on later ones).
-        // The deterministic calibration already targets historical averages.
+        // consistently unreliable. The deterministic calibration already targets
+        // historical averages and user-stated expectations.
         const expenseScale = 1.0;
+        // For income: BLEND Gemini and deterministic (50/50) rather than
+        // replacing. The deterministic multi-horizon model captures quarterly
+        // seasonality; Gemini captures narrative patterns (mean reversion, etc.)
+        const blendedIncomeTarget = currentIncome > 0
+            ? (targetIncome + currentIncome) / 2  // Average of Gemini target and deterministic
+            : targetIncome;
         const incomeScale = currentIncome > 0
-            ? Math.max(0.1, Math.min(5.0, targetIncome / currentIncome))
+            ? Math.max(0.3, Math.min(2.5, blendedIncomeTarget / currentIncome))
             : 1;
 
         for (const tx of monthTxs) {
