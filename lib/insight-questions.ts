@@ -59,6 +59,12 @@ export interface InsightProfile {
     high_income_months?: number[];
     /** Expected large income amount for high-income months */
     high_income_amount?: number;
+    /** User-stated upcoming large income amount (from "yes_large" answer) */
+    upcoming_large_income?: number;
+    /** User said "maybe" to upcoming large income */
+    upcoming_large_income_likely?: boolean;
+    /** User confirmed recurring high-income months pattern */
+    recurring_high_income_confirmed?: boolean;
 }
 
 // ─── Analysis Helpers ───────────────────────────────────────
@@ -198,6 +204,116 @@ function detectHighIncomeMonths(monthly: MonthlyTotals[]): number[] {
 
     // Return calendar months that had spikes
     return [...spikeMonths.keys()].sort((a, b) => a - b);
+}
+
+/**
+ * Ask the user about upcoming large income in the next 3 months.
+ * This is the single biggest lever for income accuracy — spike months
+ * (May $8K, Aug $6K, Jan $10K) are impossible to predict statistically
+ * but easy for the user to anticipate.
+ */
+function detectUpcomingLargeIncome(monthly: MonthlyTotals[]): InsightQuestion | null {
+    if (monthly.length < 4) return null;
+
+    const incomes = monthly.map(m => m.income).filter(i => i > 0);
+    if (incomes.length < 4) return null;
+
+    const medIncome = median(incomes);
+
+    // Only ask if income is variable enough to have spikes
+    const maxIncome = Math.max(...incomes);
+    if (maxIncome < medIncome * 2.5) return null; // No significant spikes in history
+
+    // Build the next 3 month names for the question context
+    const now = new Date();
+    const nextMonths = Array.from({ length: 3 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1);
+        return d.toLocaleString("en-US", { month: "long" });
+    });
+
+    return {
+        id: "upcoming_large_income",
+        layer: "data-driven",
+        priority: 1,
+        category: "income",
+        question: `Do you expect any large payments or deposits in the next few months (${nextMonths.join(", ")})?`,
+        context: `Your income varies a lot — some months you receive $${Math.round(maxIncome).toLocaleString()}+`,
+        options: [
+            { label: "Yes, I expect a large payment (over $1,000)", value: "yes_large" },
+            { label: "Maybe — I sometimes get large deposits", value: "maybe" },
+            { label: "No, just my regular income", value: "no" },
+        ],
+        metadata: { medianIncome: medIncome, maxIncome },
+    };
+}
+
+/**
+ * If user says they expect large income, ask for specifics.
+ * This is a follow-up question triggered by upcoming_large_income = "yes_large".
+ */
+function detectLargeIncomeDetails(monthly: MonthlyTotals[], existingAnswers: InsightAnswer[]): InsightQuestion | null {
+    const upcomingAnswer = existingAnswers.find(a => a.question_id === "upcoming_large_income");
+    if (!upcomingAnswer || upcomingAnswer.value !== "yes_large") return null;
+
+    // Build amount brackets based on historical spikes
+    const incomes = monthly.map(m => m.income).filter(i => i > 0);
+    const spikes = incomes.filter(i => i > median(incomes) * 2);
+    const medSpike = spikes.length > 0 ? median(spikes) : 5000;
+
+    const round500 = (n: number) => Math.round(n / 500) * 500 || 500;
+
+    return {
+        id: "large_income_amount",
+        layer: "data-driven",
+        priority: 1,
+        category: "income",
+        question: "Roughly how much do you expect to receive?",
+        context: "This helps us forecast your cash flow more accurately",
+        options: [
+            { label: `$1,000 – $3,000`, value: "2000" },
+            { label: `$3,000 – $5,000`, value: "4000" },
+            { label: `$5,000 – $8,000`, value: "6500" },
+            { label: `$8,000 – $12,000`, value: "10000" },
+            { label: `More than $12,000`, value: "15000" },
+        ],
+        metadata: { medianSpike: medSpike },
+    };
+}
+
+/**
+ * Detect recurring high-income months from the data and ask user to confirm.
+ * E.g., "We noticed January and May tend to have big deposits. Is that expected going forward?"
+ */
+function detectRecurringHighIncomeMonths(monthly: MonthlyTotals[]): InsightQuestion | null {
+    const highMonths = detectHighIncomeMonths(monthly);
+    if (highMonths.length === 0) return null;
+
+    const monthNames = highMonths.map(m =>
+        new Date(2025, m - 1, 1).toLocaleString("en-US", { month: "long" })
+    );
+
+    // Calculate median spike amount
+    const incomes = monthly.map(m => m.income);
+    const medIncome = median(incomes);
+    const spikeTotals = monthly
+        .filter(m => highMonths.includes(parseInt(m.month.substring(5, 7))) && m.income > medIncome * 2)
+        .map(m => m.income);
+    const medSpike = spikeTotals.length > 0 ? median(spikeTotals) : 0;
+
+    return {
+        id: "recurring_high_income_months",
+        layer: "data-driven",
+        priority: 1,
+        category: "income",
+        question: `${monthNames.join(" and ")} tend to be your biggest income months. Will that continue?`,
+        context: `These months typically bring in ~$${Math.round(medSpike).toLocaleString()}`,
+        options: [
+            { label: "Yes, I expect big income in those months", value: "yes" },
+            { label: "Probably, but the amounts vary", value: "likely" },
+            { label: "Not anymore — my situation changed", value: "no" },
+        ],
+        metadata: { highMonths, medianSpike: medSpike },
+    };
 }
 
 function detectRegimeChange(monthly: MonthlyTotals[]): InsightQuestion | null {
@@ -446,6 +562,18 @@ export function generateInsightQuestions(
     const lifeSituation = detectLifeSituation(transactions, monthly);
     if (lifeSituation && !answeredIds.has(lifeSituation.id)) questions.push(lifeSituation);
 
+    // Upcoming large income — biggest single lever for income accuracy
+    const upcomingIncome = detectUpcomingLargeIncome(monthly);
+    if (upcomingIncome && !answeredIds.has(upcomingIncome.id)) questions.push(upcomingIncome);
+
+    // Follow-up: how much? (only if they said "yes_large")
+    const largeIncomeDetails = detectLargeIncomeDetails(monthly, existingAnswers || []);
+    if (largeIncomeDetails && !answeredIds.has(largeIncomeDetails.id)) questions.push(largeIncomeDetails);
+
+    // Recurring high-income months
+    const recurringHigh = detectRecurringHighIncomeMonths(monthly);
+    if (recurringHigh && !answeredIds.has(recurringHigh.id)) questions.push(recurringHigh);
+
     const regimeChange = detectRegimeChange(monthly);
     if (regimeChange && !answeredIds.has(regimeChange.id)) questions.push(regimeChange);
 
@@ -482,6 +610,24 @@ export function generateInsightQuestions(
 export function buildInsightProfile(answers: InsightAnswer[]): InsightProfile {
     const profile: InsightProfile = {};
     const byId = new Map(answers.map(a => [a.question_id, a.value]));
+
+    // Upcoming large income
+    const upcomingInc = byId.get("upcoming_large_income");
+    const largeIncAmt = byId.get("large_income_amount");
+    if (upcomingInc === "yes_large" && largeIncAmt) {
+        profile.upcoming_large_income = parseFloat(largeIncAmt);
+    } else if (upcomingInc === "maybe") {
+        // "Maybe" — use a conservative estimate based on historical spikes
+        profile.upcoming_large_income_likely = true;
+    }
+
+    // Recurring high-income months
+    const recurringHigh = byId.get("recurring_high_income_months");
+    if (recurringHigh === "yes" || recurringHigh === "likely") {
+        // The high_income_months were detected during question generation
+        // and stored in metadata. We'll populate from transaction analysis.
+        profile.recurring_high_income_confirmed = true;
+    }
 
     // Life situation (student / temporal pattern)
     const lifeSit = byId.get("life_situation");

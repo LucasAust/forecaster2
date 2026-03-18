@@ -1926,9 +1926,47 @@ export function generateDeterministicForecast(
     const multiHorizonTargets = multiHorizonResults.map(t => t.target);
     const multiHorizonConfidence = multiHorizonResults.map(t => t.confidence);
     
-    const seasonalIncomeTargets = insightProfile?.expected_monthly_income
+    let seasonalIncomeTargets = insightProfile?.expected_monthly_income
         ? Array(forecastMonths).fill(insightProfile.expected_monthly_income)
         : multiHorizonTargets;
+
+    // Upcoming large income: if user confirmed a big payment is coming,
+    // add it to the first forecast month's target. This is the single
+    // biggest lever for income accuracy on spike months.
+    if (insightProfile?.upcoming_large_income && insightProfile.upcoming_large_income > 0) {
+        seasonalIncomeTargets = [...seasonalIncomeTargets];
+        seasonalIncomeTargets[0] = (seasonalIncomeTargets[0] || 0) + insightProfile.upcoming_large_income;
+    } else if (insightProfile?.upcoming_large_income_likely) {
+        // User said "maybe" — add a conservative estimate (median of historical spikes)
+        // detected from transaction data. Use 30% of the median spike as a hedge.
+        const incomeVals = (rawTransactions as any[])
+            .filter((tx: any) => !tx.pending && tx.amount < 0)
+            .map((tx: any) => Math.abs(tx.amount));
+        const medIncome = incomeVals.length > 0
+            ? [...incomeVals].sort((a: number, b: number) => a - b)[Math.floor(incomeVals.length / 2)]
+            : 0;
+        // Only add if there are real spikes in the data
+        const maxMonthlyIncome = multiHorizonTargets.length > 0 ? Math.max(...multiHorizonTargets) : 0;
+        if (maxMonthlyIncome > medIncome * 2) {
+            seasonalIncomeTargets = [...seasonalIncomeTargets];
+            seasonalIncomeTargets[0] = (seasonalIncomeTargets[0] || 0) + maxMonthlyIncome * 0.3;
+        }
+    }
+
+    // Recurring high-income months: if confirmed, boost targets for
+    // months that historically have large deposits
+    if (insightProfile?.recurring_high_income_confirmed && insightProfile?.high_income_months) {
+        seasonalIncomeTargets = [...seasonalIncomeTargets];
+        for (let i = 0; i < forecastMonths; i++) {
+            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
+            const calMonth = forecastMonth.getMonth() + 1;
+            if (insightProfile.high_income_months.includes(calMonth)) {
+                // Boost this month's target with the expected high-income amount
+                const boost = insightProfile.high_income_amount || multiHorizonTargets[i] * 2;
+                seasonalIncomeTargets[i] = Math.max(seasonalIncomeTargets[i], boost);
+            }
+        }
+    }
     
     const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
     const targetTotalIncome = seasonalIncomeTargets.reduce((a: number, b: number) => a + b, 0) * incomeHaircut;
