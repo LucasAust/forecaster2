@@ -53,6 +53,12 @@ export interface InsightProfile {
     confirmed_recurring?: string[];
     /** Custom notes from free-text answers */
     notes?: string[];
+    /** Life situation — temporal income pattern */
+    life_situation?: "student_aid" | "student_no_aid" | "seasonal_worker" | "none";
+    /** Detected calendar months with expected large income (disbursements, bonuses) */
+    high_income_months?: number[];
+    /** Expected large income amount for high-income months */
+    high_income_amount?: number;
 }
 
 // ─── Analysis Helpers ───────────────────────────────────────
@@ -99,6 +105,100 @@ function mean(arr: number[]): number {
 }
 
 // ─── Detectors ──────────────────────────────────────────────
+
+// ─── Temporal / Life-Situation Detectors ────────────────────
+
+/** Patterns that indicate student status */
+const STUDENT_PATTERNS = [
+    /tuition/i, /university/i, /\bcollege\b/i, /\busc\b/i, /campus/i,
+    /financial\s*aid/i, /student/i, /bursar/i, /\bfafsa\b/i,
+    /dormitory/i, /dorm\b/i, /textbook/i, /bookstore/i,
+];
+
+/**
+ * Detect if the user is likely a student based on transaction merchants.
+ * If student-like transactions are found, generate a life-situation question.
+ */
+function detectLifeSituation(transactions: Transaction[], monthly: MonthlyTotals[]): InsightQuestion | null {
+    if (transactions.length < 20 || monthly.length < 6) return null;
+
+    // Check for student signals in merchant names
+    let studentSignals = 0;
+    const studentMerchants = new Set<string>();
+    for (const tx of transactions) {
+        const name = `${tx.merchant_name || ""} ${tx.name || ""}`;
+        for (const pattern of STUDENT_PATTERNS) {
+            if (pattern.test(name)) {
+                studentSignals++;
+                studentMerchants.add(
+                    (tx.merchant_name || tx.name || "").substring(0, 30)
+                );
+                break;
+            }
+        }
+    }
+
+    // Also check for large deposits in academic calendar months (Jan, May, Aug)
+    const acadMonths = [1, 5, 8];
+    let acadSpikes = 0;
+    const incomes = monthly.map(m => m.income);
+    const medIncome = median(incomes);
+    for (const m of monthly) {
+        const calMonth = parseInt(m.month.substring(5, 7));
+        if (acadMonths.includes(calMonth) && m.income > medIncome * 3) {
+            acadSpikes++;
+        }
+    }
+
+    // Need at least 2 student signals OR (1 signal + academic spikes)
+    if (studentSignals < 2 && !(studentSignals >= 1 && acadSpikes >= 1)) {
+        return null;
+    }
+
+    const merchantList = [...studentMerchants].slice(0, 3).join(", ");
+
+    return {
+        id: "life_situation",
+        layer: "data-driven",
+        priority: 1, // High priority — huge accuracy impact
+        category: "income",
+        question: "Are you currently a student?",
+        context: studentMerchants.size > 0
+            ? `We noticed transactions at: ${merchantList}`
+            : undefined,
+        options: [
+            { label: "Yes, I receive financial aid / scholarships", value: "student_aid" },
+            { label: "Yes, but I don't receive financial aid", value: "student_no_aid" },
+            { label: "No, I'm not a student", value: "not_student" },
+        ],
+        metadata: { studentSignals, acadSpikes, studentMerchants: [...studentMerchants] },
+    };
+}
+
+/**
+ * Detect which calendar months historically have large income spikes.
+ * Used to build the high_income_months profile field.
+ */
+function detectHighIncomeMonths(monthly: MonthlyTotals[]): number[] {
+    if (monthly.length < 6) return [];
+
+    const incomes = monthly.map(m => m.income);
+    const medIncome = median(incomes);
+    const threshold = medIncome * 3; // 3x median = "spike"
+
+    // Group spikes by calendar month
+    const spikeMonths = new Map<number, number[]>();
+    for (const m of monthly) {
+        if (m.income > threshold) {
+            const calMonth = parseInt(m.month.substring(5, 7));
+            if (!spikeMonths.has(calMonth)) spikeMonths.set(calMonth, []);
+            spikeMonths.get(calMonth)!.push(m.income);
+        }
+    }
+
+    // Return calendar months that had spikes
+    return [...spikeMonths.keys()].sort((a, b) => a - b);
+}
 
 function detectRegimeChange(monthly: MonthlyTotals[]): InsightQuestion | null {
     if (monthly.length < 4) return null;
@@ -341,6 +441,11 @@ export function generateInsightQuestions(
     }
 
     // Layer 2: Data-driven questions
+
+    // Life situation (student detection) — highest priority, huge accuracy impact
+    const lifeSituation = detectLifeSituation(transactions, monthly);
+    if (lifeSituation && !answeredIds.has(lifeSituation.id)) questions.push(lifeSituation);
+
     const regimeChange = detectRegimeChange(monthly);
     if (regimeChange && !answeredIds.has(regimeChange.id)) questions.push(regimeChange);
 
@@ -377,6 +482,17 @@ export function generateInsightQuestions(
 export function buildInsightProfile(answers: InsightAnswer[]): InsightProfile {
     const profile: InsightProfile = {};
     const byId = new Map(answers.map(a => [a.question_id, a.value]));
+
+    // Life situation (student / temporal pattern)
+    const lifeSit = byId.get("life_situation");
+    if (lifeSit === "student_aid") {
+        profile.life_situation = "student_aid";
+        profile.income_type = "freelance"; // Student income is inherently variable
+    } else if (lifeSit === "student_no_aid") {
+        profile.life_situation = "student_no_aid";
+    } else if (lifeSit === "not_student") {
+        profile.life_situation = "none";
+    }
 
     // Income type
     const incomeType = byId.get("income_type") || byId.get("income_pattern");

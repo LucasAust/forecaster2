@@ -1922,7 +1922,7 @@ export function generateDeterministicForecast(
     // signals for per-month income targets. Falls back to user-stated expectation
     // if provided via insight questions.
     const { predictMultiHorizonIncome } = require("./multi-horizon-income");
-    const multiHorizonResults = predictMultiHorizonIncome(rawTransactions, today, forecastMonths) as Array<{target: number; confidence: string}>;
+    const multiHorizonResults = predictMultiHorizonIncome(rawTransactions, today, forecastMonths, insightProfile) as Array<{target: number; confidence: string}>;
     const multiHorizonTargets = multiHorizonResults.map(t => t.target);
     const multiHorizonConfidence = multiHorizonResults.map(t => t.confidence);
     

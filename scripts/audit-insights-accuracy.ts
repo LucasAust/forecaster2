@@ -160,6 +160,14 @@ const scenarios: { name: string; profile: InsightProfile | undefined }[] = [
         name: "Historical anchor (temporary spike)",
         profile: { regime_change_confirmed: false, spending_anchor: "historical" },
     },
+    {
+        name: "Student + aid + recent anchor + expenses $3000",
+        profile: {
+            regime_change_confirmed: true, spending_anchor: "recent",
+            expected_monthly_expenses: 3000, income_type: "freelance",
+            life_situation: "student_aid",
+        },
+    },
 ];
 
 // Test months: 2025-04 through 2025-12 (need enough history for recent anchor)

@@ -15,6 +15,7 @@
  */
 
 import type { Transaction } from "@/types";
+import type { InsightProfile } from "./insight-questions";
 
 interface IncomeSignal {
     horizon: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
@@ -348,6 +349,71 @@ function yearlyTrendSignal(
     };
 }
 
+/**
+ * Calendar-month deposit signal: uses lumpy/sporadic deposits (check deposits,
+ * large cash deposits) grouped by calendar month to detect annual patterns.
+ * 
+ * E.g., if January consistently has $10K deposits (scholarship, tax refund),
+ * this signal captures that seasonal income boost.
+ * 
+ * Only fires when there's at least one prior same-calendar-month deposit.
+ * Discounted heavily since deposit timing is unpredictable.
+ */
+function calendarMonthDepositSignal(
+    transactions: Transaction[],
+    calMonth: number,
+    forecastDate: Date
+): IncomeSignal {
+    // Find all lumpy/deposit-type income transactions
+    const lumpyTxs: { date: string; amount: number }[] = [];
+    for (const tx of transactions) {
+        if (tx.pending || tx.amount >= 0) continue;
+        const cat = Array.isArray(tx.category) ? tx.category[0] : tx.category;
+        if (cat === "Transfer") continue;
+        const name = tx.merchant_name || tx.name || "";
+        if (LUMPY_INCOME_PATTERNS.some(p => p.test(name))) {
+            lumpyTxs.push({ date: tx.date, amount: Math.abs(tx.amount) });
+        }
+    }
+
+    if (lumpyTxs.length < 2) {
+        return { horizon: "monthly", target: 0, confidence: 0, cv: 1 };
+    }
+
+    // Group by calendar month
+    const byCalMonth = new Map<number, number[]>();
+    for (const tx of lumpyTxs) {
+        const m = parseInt(tx.date.substring(5, 7));
+        if (!byCalMonth.has(m)) byCalMonth.set(m, []);
+        byCalMonth.get(m)!.push(tx.amount);
+    }
+
+    const sameMonthDeposits = byCalMonth.get(calMonth);
+    if (!sameMonthDeposits || sameMonthDeposits.length < 2) {
+        // Need 2+ same-month observations to establish an annual pattern.
+        return { horizon: "monthly", target: 0, confidence: 0, cv: 1 };
+    }
+
+    const n = sameMonthDeposits.length;
+    const depositCV = cv(sameMonthDeposits);
+
+    // Only fire for reasonably consistent patterns
+    if (depositCV > 1.0) {
+        return { horizon: "monthly", target: 0, confidence: 0, cv: depositCV };
+    }
+
+    const confidence = Math.min(0.7, n * 0.3) * (1 / (1 + depositCV));
+    const discount = depositCV < 0.5 ? 0.25 : 0.15;
+    const baseAmount = Math.min(...sameMonthDeposits);
+
+    return {
+        horizon: "monthly",   // Reuse "monthly" since IncomeSignal is typed
+        target: baseAmount * discount,
+        confidence,
+        cv: depositCV,
+    };
+}
+
 // ─── Blend Signals ──────────────────────────────────────────
 
 /**
@@ -444,6 +510,94 @@ function calcLumpyIncomeAllowance(
     return median(sameQTotals) * 0.35; // Heavy discount — lumpy income is very unpredictable
 }
 
+/**
+ * Predict disbursement income for a specific calendar month.
+ * 
+ * For students with financial aid, large deposits cluster in academic
+ * calendar months (typically Jan/May/Aug for semester schools).
+ * 
+ * Detects which calendar months historically had large lump-sum deposits
+ * and returns the expected amount for that month.
+ * 
+ * Returns 0 for non-disbursement months.
+ */
+function predictDisbursementIncome(
+    transactions: Transaction[],
+    calMonth: number,
+    forecastDate: Date
+): number {
+    // Find all large deposits (check deposits, lump sums)
+    const lumpyTxs: { date: string; amount: number }[] = [];
+    for (const tx of transactions) {
+        if (tx.pending || tx.amount >= 0) continue;
+        const cat = Array.isArray(tx.category) ? tx.category[0] : tx.category;
+        if (cat === "Transfer") continue;
+        const name = tx.merchant_name || tx.name || "";
+        // Only use deposit-pattern income (check deposits, bank deposits)
+        // NOT Venmo/PayPal cashouts which are regular freelance income
+        if (LUMPY_INCOME_PATTERNS.some(p => p.test(name))) {
+            lumpyTxs.push({ date: tx.date, amount: Math.abs(tx.amount) });
+        }
+    }
+
+    // Group large deposits by calendar month
+    const byCalMonth = new Map<number, number[]>();
+    for (const tx of lumpyTxs) {
+        if (tx.amount < 500) continue; // Only significant deposits
+        const m = parseInt(tx.date.substring(5, 7));
+        if (!byCalMonth.has(m)) byCalMonth.set(m, []);
+        byCalMonth.get(m)!.push(tx.amount);
+    }
+
+    // Check if this calendar month is a disbursement month
+    const monthDeposits = byCalMonth.get(calMonth);
+    if (!monthDeposits || monthDeposits.length === 0) return 0;
+
+    // Sum deposits per year-month, then take the median across years
+    // (a month might have multiple deposits: e.g., $5000 + $2410 in May)
+    const byYearMonth = new Map<string, number>();
+    for (const tx of lumpyTxs) {
+        if (tx.amount < 500) continue;
+        const m = parseInt(tx.date.substring(5, 7));
+        if (m !== calMonth) continue;
+        const ym = tx.date.substring(0, 7);
+        byYearMonth.set(ym, (byYearMonth.get(ym) || 0) + tx.amount);
+    }
+
+    const yearlyTotals = [...byYearMonth.values()];
+    if (yearlyTotals.length === 0) return 0;
+
+    if (yearlyTotals.length === 0) return 0;
+
+    // For academic disbursement months (Jan, May, Aug), even a single
+    // observation is meaningful because the pattern is tied to the academic
+    // calendar, not random chance. Use the observation with conservative discount.
+    const ACAD_MONTHS = [1, 5, 8]; // Typical US semester disbursement months
+    const isAcadMonth = ACAD_MONTHS.includes(calMonth);
+
+    if (yearlyTotals.length >= 2) {
+        // Multiple observations — use minimum (conservative)
+        const minYearly = Math.min(...yearlyTotals);
+        return minYearly * 0.85;
+    }
+
+    if (isAcadMonth && yearlyTotals[0] >= 500) {
+        // Single observation in an academic month — likely a real disbursement.
+        // Use the MAX of: (a) this month's observation, (b) median of ALL
+        // large deposit months. This helps when one year had a small disbursement
+        // but other months show much larger ones (e.g., $10K in Jan vs $1.7K in May).
+        const allLargeMonthTotals = [...byYearMonth.values()].filter(v => v >= 500);
+        const medAllLarge = allLargeMonthTotals.length > 0 ? median(allLargeMonthTotals) : yearlyTotals[0];
+        // Blend this month's observation with the overall pattern
+        const blendedEstimate = (yearlyTotals[0] + medAllLarge) / 2;
+        // Discount 50% for single observation uncertainty
+        return blendedEstimate * 0.5;
+    }
+
+    // Single non-academic-month observation: too risky to predict
+    return 0;
+}
+
 // ─── Main API ───────────────────────────────────────────────
 
 /**
@@ -456,7 +610,8 @@ function calcLumpyIncomeAllowance(
 export function predictMultiHorizonIncome(
     transactions: Transaction[],
     referenceDate: Date,
-    months: number = 3
+    months: number = 3,
+    insightProfile?: InsightProfile
 ): MultiHorizonIncomeTarget[] {
     const realIncome = extractRealIncome(transactions);
 
@@ -489,7 +644,21 @@ export function predictMultiHorizonIncome(
             yearlyTrendSignal(realIncome),
         ];
 
-        const blendedTarget = blendSignals(signals);
+        // Calendar-month deposit signal: captures annual patterns
+        // in lumpy income (check deposits, etc.)
+        const depositSig = calendarMonthDepositSignal(transactions, calMonth, d);
+
+        let blendedTarget = blendSignals(signals) + depositSig.target;
+
+        // Student financial aid override: if user confirmed they receive aid,
+        // detect academic disbursement months and predict accordingly.
+        if (insightProfile?.life_situation === "student_aid") {
+            const disbursementTarget = predictDisbursementIncome(transactions, calMonth, d);
+            if (disbursementTarget > 0) {
+                // For disbursement months: use the disbursement amount + regular income
+                blendedTarget = blendSignals(signals) + disbursementTarget;
+            }
+        }
 
         const avgConfidence = mean(signals.filter(s => s.target > 0).map(s => s.confidence));
 
