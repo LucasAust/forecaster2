@@ -51,6 +51,14 @@ function cv(arr: number[]): number {
     return std / m;
 }
 
+// Patterns for lumpy income (check deposits, large Venmo) that the main
+// forecast engine filters as noise but we want to count for target-setting
+const LUMPY_INCOME_PATTERNS = [
+    /remote\s*online\s*deposit/i,
+    /check\s*deposit/i,
+    /deposit\s+id\s+number/i,
+];
+
 // Noise patterns — internal transfers, not real income
 const INTERNAL_TRANSFER_PATTERNS = [
     /transfer\s*from\s*(chk|sav|checking|savings)/i,
@@ -336,6 +344,57 @@ function blendSignals(signals: IncomeSignal[]): number {
     return blended * conservatismFactor;
 }
 
+/**
+ * Calculate a monthly "lumpy income allowance" from check deposits
+ * and other sporadic income sources that the main forecast engine
+ * filters as noise. Uses quarterly average as the estimate.
+ */
+function calcLumpyIncomeAllowance(
+    transactions: Transaction[],
+    forecastMonth: Date
+): number {
+    const lumpyTxs: { date: string; amount: number }[] = [];
+
+    for (const tx of transactions) {
+        if (tx.pending || tx.amount >= 0) continue;
+        const cat = Array.isArray(tx.category) ? tx.category[0] : tx.category;
+        if (cat === "Transfer") continue;
+        const name = tx.merchant_name || tx.name || "";
+        if (LUMPY_INCOME_PATTERNS.some(p => p.test(name))) {
+            lumpyTxs.push({ date: tx.date, amount: Math.abs(tx.amount) });
+        }
+    }
+
+    if (lumpyTxs.length < 2) return 0;
+
+    // Get quarterly totals for same quarter across years
+    const targetQ = Math.ceil((forecastMonth.getMonth() + 1) / 3);
+    const byQuarter = new Map<string, number>();
+    for (const tx of lumpyTxs) {
+        const m = parseInt(tx.date.substring(5, 7));
+        const y = tx.date.substring(0, 4);
+        const q = Math.ceil(m / 3);
+        const key = `${y}-Q${q}`;
+        byQuarter.set(key, (byQuarter.get(key) || 0) + tx.amount);
+    }
+
+    // Same quarter average → monthly rate, with conservative discount
+    const sameQTotals = [...byQuarter.entries()]
+        .filter(([k]) => k.endsWith(`Q${targetQ}`))
+        .map(([, v]) => v / 3);
+
+    if (sameQTotals.length === 0) {
+        // Fallback: overall quarterly average
+        const allQ = [...byQuarter.values()].map(v => v / 3);
+        if (allQ.length === 0) return 0;
+        return median(allQ) * 0.25; // Very heavy discount for low confidence
+    }
+
+    // Use median of same-quarter monthly rates, discounted 30%
+    // (conservative because lumpy income is unpredictable)
+    return median(sameQTotals) * 0.35; // Heavy discount — lumpy income is very unpredictable
+}
+
 // ─── Main API ───────────────────────────────────────────────
 
 /**
@@ -381,12 +440,13 @@ export function predictMultiHorizonIncome(
             yearlyTrendSignal(realIncome),
         ];
 
-        const target = blendSignals(signals);
+        const blendedTarget = blendSignals(signals);
+
         const avgConfidence = mean(signals.filter(s => s.target > 0).map(s => s.confidence));
 
         results.push({
             month: monthStr,
-            target: Math.round(target * 100) / 100,
+            target: Math.round(blendedTarget * 100) / 100,
             signals,
             confidence: avgConfidence > 0.6 ? "high" : avgConfidence > 0.3 ? "medium" : "low",
         });

@@ -1678,7 +1678,11 @@ function calcRecentMonthlyExpenses(txs: CleanTransaction[], referenceDate: Date,
     const full = months.filter(([m]) => m < refMonth);
     const recent = full.slice(-monthCount);
     if (recent.length === 0) return 0;
-    return recent.reduce((s, [, v]) => s + v, 0) / recent.length;
+    // Exponential weighting: most recent month gets highest weight.
+    // This captures spending trends (e.g., expenses rising month over month).
+    const weights = recent.map((_, i) => Math.pow(1.5, i));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    return recent.reduce((s, [, v], i) => s + v * weights[i], 0) / totalWeight;
 }
 
 /**
