@@ -222,7 +222,9 @@ function recentMomentumSignal(
         return { horizon: "monthly", target: 0, confidence: 0, cv: 1 };
     }
 
-    // Weighted average: most recent month gets 3x weight, prior 2x, oldest 1x
+    // Use the LOWER of: weighted recent average vs minimum recent month.
+    // This captures the realistic downside — income can drop suddenly,
+    // and predicting the minimum is safer than predicting the average.
     const weights = [1, 2, 3].slice(-months.length);
     let weightedSum = 0;
     let totalWeight = 0;
@@ -230,12 +232,15 @@ function recentMomentumSignal(
         weightedSum += months[i][1] * weights[i];
         totalWeight += weights[i];
     }
-    const target = weightedSum / totalWeight;
+    const weightedAvg = weightedSum / totalWeight;
+    const minRecent = Math.min(...months.map(([, v]) => v));
+    // Blend: 60% weighted average, 40% minimum (conservative lean)
+    const target = weightedAvg * 0.6 + minRecent * 0.4;
 
     return {
         horizon: "monthly", // Labeled monthly but it's really "recent momentum"
         target,
-        confidence: Math.min(1, months.length / 2), // 2+ months = full confidence
+        confidence: Math.min(0.8, months.length / 3), // Moderate cap — momentum is useful but volatile
         cv: cv(months.map(([, v]) => v)),
     };
 }

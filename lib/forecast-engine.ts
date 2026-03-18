@@ -2002,11 +2002,18 @@ export function generateDeterministicForecast(
             const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
             const predicted = incomeByMonth.get(monthStr) || 0;
             const target = (seasonalIncomeTargets[i] || 0) * incomeHaircut;
-            // Only fill if predicted is less than 80% of target, gap is meaningful,
-            // AND the multi-horizon model has high confidence for this month
+            // Fill if predicted falls short of target. Fill amount depends on confidence:
+            //   high:   fill 100% of gap (strong seasonal/quarterly signal)
+            //   medium: fill 50% of gap (some signal but uncertain)
+            //   low:    no fill
             const conf = multiHorizonConfidence[i] || "low";
-            if (target > 0 && predicted < target * 0.8 && conf === "high") {
-                const gap = target - predicted;
+            // If scheduler produced $0 income, always fill (something is better than nothing).
+            // If scheduler produced some income, only fill for high-confidence targets.
+            const fillPct = predicted < 1 ? 0.7
+                : conf === "high" ? 0.9
+                : 0;
+            if (target > 0 && predicted < target * 0.8 && fillPct > 0) {
+                const gap = (target - predicted) * fillPct;
                 if (gap > 50) {
                     incomeFillTxs.push({
                         date: `${monthStr}-15`,
