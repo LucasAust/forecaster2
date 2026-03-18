@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
@@ -75,9 +76,9 @@ export async function updateSession(request: NextRequest) {
                     return NextResponse.redirect(url)
                 }
             } else if (mfaMethod === 'email') {
-                // Check email MFA cookie
+                // Check email MFA cookie — must validate signature & expiry, not just existence
                 const mfaCookie = request.cookies.get('arc_email_mfa')
-                if (!mfaCookie?.value) {
+                if (!mfaCookie?.value || !isEmailMfaCookieValid(mfaCookie.value, user.id)) {
                     const url = request.nextUrl.clone()
                     url.pathname = '/auth/mfa/challenge'
                     return NextResponse.redirect(url)
@@ -89,4 +90,46 @@ export async function updateSession(request: NextRequest) {
     }
 
     return supabaseResponse
+}
+
+// ─── Email MFA cookie validation (mirrors lib/mfa-session.ts logic) ──────
+// We duplicate validation here because middleware runs in the Edge runtime
+// and cannot import the full mfa-session module (which uses next/headers cookies()).
+
+const MFA_MAX_AGE = 12 * 60 * 60; // 12 hours in seconds
+
+function getMfaSecret(): string {
+    const secret = process.env.MFA_COOKIE_SECRET;
+    if (!secret) {
+        if (process.env.NODE_ENV === 'production') {
+            // In production without a secret, reject all cookies
+            return '';
+        }
+        return 'dev-only-mfa-secret-not-for-production';
+    }
+    return secret;
+}
+
+function isEmailMfaCookieValid(cookieValue: string, userId: string): boolean {
+    const secret = getMfaSecret();
+    if (!secret) return false;
+
+    const parts = cookieValue.split(':');
+    if (parts.length !== 3) return false;
+
+    const [cookieUserId, timestamp, providedSignature] = parts;
+    if (cookieUserId !== userId) return false;
+
+    // Validate signature
+    const payload = `${cookieUserId}:${timestamp}`;
+    const expectedSignature = createHmac('sha256', secret).update(payload).digest('hex');
+    const a = Buffer.from(providedSignature);
+    const b = Buffer.from(expectedSignature);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+
+    // Check expiry
+    const age = Date.now() - Number(timestamp);
+    if (age > MFA_MAX_AGE * 1000) return false;
+
+    return true;
 }

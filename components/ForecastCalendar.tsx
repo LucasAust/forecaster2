@@ -49,7 +49,7 @@ export function ForecastCalendar() {
                                 )}
                                 {tx && (
                                     <span className="text-xs text-zinc-400 font-normal ml-2">
-                                        {tx.confidence_score === "high" ? tx.merchant : (tx.category || tx.merchant || "Transaction")}
+                                        {tx.merchant || tx.category || "Transaction"}
                                     </span>
                                 )}
                             </td>

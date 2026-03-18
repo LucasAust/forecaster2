@@ -16,10 +16,11 @@ export async function POST(request: Request) {
         let updateData: Record<string, string | number> = { user_id: user.id };
 
         if (monthly_budget !== undefined && monthly_budget !== null) {
-            if (isNaN(Number(monthly_budget))) {
+            const budgetNum = Number(monthly_budget);
+            if (isNaN(budgetNum) || !Number.isFinite(budgetNum) || budgetNum < 0) {
                 return NextResponse.json({ error: 'Invalid budget value' }, { status: 400 });
             }
-            updateData.monthly_budget = Number(monthly_budget);
+            updateData.monthly_budget = budgetNum;
         }
 
         if (display_name !== undefined) {

@@ -567,8 +567,6 @@ function predictDisbursementIncome(
     const yearlyTotals = [...byYearMonth.values()];
     if (yearlyTotals.length === 0) return 0;
 
-    if (yearlyTotals.length === 0) return 0;
-
     // For academic disbursement months (Jan, May, Aug), even a single
     // observation is meaningful because the pattern is tied to the academic
     // calendar, not random chance. Use the observation with conservative discount.
@@ -583,10 +581,18 @@ function predictDisbursementIncome(
 
     if (isAcadMonth && yearlyTotals[0] >= 500) {
         // Single observation in an academic month — likely a real disbursement.
-        // Use the MAX of: (a) this month's observation, (b) median of ALL
-        // large deposit months. This helps when one year had a small disbursement
-        // but other months show much larger ones (e.g., $10K in Jan vs $1.7K in May).
-        const allLargeMonthTotals = [...byYearMonth.values()].filter(v => v >= 500);
+        // Blend this month's observation with the median of ALL large deposit
+        // months (across all calendar months). This helps when one year had a
+        // small disbursement but other months show much larger ones
+        // (e.g., $10K in Jan vs $1.7K in May).
+        // Build totals from ALL calendar months' large deposits (not just calMonth)
+        const allMonthTotals = new Map<string, number>();
+        for (const tx of lumpyTxs) {
+            if (tx.amount < 500) continue;
+            const ym = tx.date.substring(0, 7);
+            allMonthTotals.set(ym, (allMonthTotals.get(ym) || 0) + tx.amount);
+        }
+        const allLargeMonthTotals = [...allMonthTotals.values()].filter(v => v >= 500);
         const medAllLarge = allLargeMonthTotals.length > 0 ? median(allLargeMonthTotals) : yearlyTotals[0];
         // Blend this month's observation with the overall pattern
         const blendedEstimate = (yearlyTotals[0] + medAllLarge) / 2;

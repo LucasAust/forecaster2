@@ -13,6 +13,7 @@ export async function DELETE() {
     try {
         // Delete user data from all tables
         await supabase.from("mfa_email_codes").delete().eq("user_id", user.id);
+        await supabase.from("insight_answers").delete().eq("user_id", user.id);
         await supabase.from("ai_suggestions").delete().eq("user_id", user.id);
         await supabase.from("transactions").delete().eq("user_id", user.id);
         await supabase.from("plaid_items").delete().eq("user_id", user.id);

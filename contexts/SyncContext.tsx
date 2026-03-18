@@ -68,10 +68,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // Set by PlaidLink when a bank-connect sync is requested while we're already syncing
     const pendingBankConnectRef = useRef(false);
     const bgPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const unmountedRef = useRef(false);
 
     // ── Cleanup ──────────────────────────────────────────────
     useEffect(() => {
-        return () => { if (bgPollTimerRef.current) clearTimeout(bgPollTimerRef.current); };
+        return () => {
+            unmountedRef.current = true;
+            if (bgPollTimerRef.current) clearTimeout(bgPollTimerRef.current);
+        };
     }, []);
 
     // ── Clarification helpers ────────────────────────────────
@@ -137,9 +141,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // Polls every 30s, up to 10 minutes, until transactions appear.
     const startBackgroundPoll = useCallback((attempt: number) => {
         if (bgPollTimerRef.current) clearTimeout(bgPollTimerRef.current);
-        if (attempt >= 20) return; // max 20 × 30s = 10 min
+        if (attempt >= 20 || unmountedRef.current) return; // max 20 × 30s = 10 min
 
         bgPollTimerRef.current = setTimeout(async () => {
+            if (unmountedRef.current) return;
             if (isSyncingRef.current) { startBackgroundPoll(attempt + 1); return; }
             try {
                 const data = await fetchTransactions(true);

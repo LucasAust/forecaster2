@@ -16,10 +16,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "item_id is required" }, { status: 400 });
         }
 
-        // Get the access token for this item
+        // Get the access token and accounts for this item
         const { data: item, error: fetchError } = await supabase
             .from("plaid_items")
-            .select("access_token")
+            .select("access_token, accounts_data")
             .eq("user_id", user.id)
             .eq("item_id", item_id)
             .single();
@@ -34,6 +34,19 @@ export async function POST(request: Request) {
         } catch {
             // Even if Plaid removal fails, still remove from our DB
             console.warn("Plaid itemRemove failed, proceeding with DB removal");
+        }
+
+        // Remove associated transactions (by account_id from stored accounts_data)
+        const accounts = Array.isArray(item.accounts_data) ? item.accounts_data : [];
+        const accountIds = accounts
+            .map((a: Record<string, unknown>) => a.account_id as string)
+            .filter(Boolean);
+        if (accountIds.length > 0) {
+            await supabase
+                .from("transactions")
+                .delete()
+                .eq("user_id", user.id)
+                .in("account_id", accountIds);
         }
 
         // Remove from database

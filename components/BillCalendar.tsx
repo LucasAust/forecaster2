@@ -250,7 +250,12 @@ export function BillCalendar() {
                             const color = CATEGORY_COLORS[category] || "#71717a";
                             const merchant = getDisplayMerchant(tx);
                             const amt = Math.abs(tx.amount);
-                            const isExpense = tx.amount > 0 || (tx.amount < 0 && ('type' in tx ? tx.type !== "income" : true));
+                            // Predicted transactions use AI convention (amount < 0 = expense, > 0 = income)
+                            // Actual (Plaid) transactions use Plaid convention (amount > 0 = expense, < 0 = income)
+                            const isPredicted = 'type' in tx && ((tx as PredictedTransaction).type === 'expense' || (tx as PredictedTransaction).type === 'income');
+                            const isExpense = isPredicted
+                                ? (tx as PredictedTransaction).type === 'expense'
+                                : tx.amount > 0;
 
                             return (
                                 <div key={i} className="flex items-center justify-between rounded-lg bg-zinc-800/50 px-3 py-2">
@@ -261,8 +266,8 @@ export function BillCalendar() {
                                             <p className="text-xs text-zinc-500">{category}</p>
                                         </div>
                                     </div>
-                                    <span className={clsx("text-sm font-medium", tx.amount > 0 ? "text-rose-400" : "text-emerald-400")}>
-                                        {tx.amount > 0 ? "-" : "+"}${amt.toFixed(2)}
+                                    <span className={clsx("text-sm font-medium", isExpense ? "text-rose-400" : "text-emerald-400")}>
+                                        {isExpense ? "-" : "+"}${amt.toFixed(2)}
                                     </span>
                                 </div>
                             );

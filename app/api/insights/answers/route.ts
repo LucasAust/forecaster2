@@ -19,9 +19,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true });
         }
 
-        // Upsert each answer (max 10)
+        // Upsert each answer (max 10), skipping invalid entries
         const limited = answers.slice(0, 10);
         for (const answer of limited) {
+            if (!answer.question_id || typeof answer.question_id !== 'string') continue;
+            if (answer.value === undefined || answer.value === null) continue;
             await supabase
                 .from("insight_answers")
                 .upsert({

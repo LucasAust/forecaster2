@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     try {
         const { user_preferences } = await request.json();
 
-        if (!user_preferences || typeof user_preferences !== 'object') {
+        if (!user_preferences || typeof user_preferences !== 'object' || Array.isArray(user_preferences)) {
             return NextResponse.json({ error: 'Invalid preferences' }, { status: 400 });
         }
 

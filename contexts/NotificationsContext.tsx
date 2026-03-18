@@ -39,7 +39,11 @@ function loadNotifications(): Notification[] {
 function saveNotifications(notifications: Notification[]) {
     // Keep only last 50
     const trimmed = notifications.slice(0, 50);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch {
+        // localStorage full or restricted — data still in memory state
+    }
 }
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {

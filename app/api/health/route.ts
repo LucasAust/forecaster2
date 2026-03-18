@@ -36,9 +36,15 @@ export async function GET() {
                 .limit(1)
                 .single();
                 
-            // Note: We expect an error here since we're not selecting actual columns,
-            // but the important part is that we can connect to the database
-            healthData.database = error?.code === 'PGRST116' ? 'connected' : 'connected';
+            // PGRST116 = "no rows found" which is expected — means DB is reachable
+            // Any other error code indicates a real problem
+            if (!error || error.code === 'PGRST116') {
+                healthData.database = 'connected';
+            } else {
+                console.error('[Health Check] Database query error:', error);
+                healthData.database = 'error';
+                healthData.status = 'degraded';
+            }
             
         } catch (dbError) {
             console.error('[Health Check] Database connection failed:', dbError);

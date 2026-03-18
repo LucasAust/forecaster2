@@ -47,7 +47,10 @@ function DashboardContent() {
 
   useEffect(() => {
     authFetch('/api/settings')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Settings fetch failed: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.email) {
           setEmail(data.email);
