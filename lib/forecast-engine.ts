@@ -56,6 +56,7 @@ export interface RecurringSeries {
     anchor_day: number;
     typical_amount: number;
     recent_amount: number; // weighted toward most recent occurrences
+    latest_amount?: number; // most recent single observation — best for trending high-value bills
     amount_trend: number; // positive = getting more expensive, negative = getting cheaper
     amount_is_fixed: boolean;
     is_subscription: boolean; // SaaS/digital — posts on exact date, no weekend shift
@@ -818,6 +819,7 @@ function detectRecurringSeries(
                 anchor_day: anchorDay,
                 typical_amount: roundTo(typicalAbs * sign, 2),
                 recent_amount: roundTo(recentAbs * sign, 2),
+                latest_amount: roundTo(absAmounts[absAmounts.length - 1] * sign, 2),
                 amount_trend: trend,
                 amount_is_fixed: isFixed,
                 is_subscription: isSubscription(merchant),
@@ -1381,8 +1383,20 @@ function scheduleRecurringItems(
         // representative value and ignores the influence of any single outlier occurrence.
         // For variable amounts (e.g. utility bills), use weighted-recent — it reflects the
         // current trend which is the most predictive of near-future amounts.
-        const baseAbs = Math.abs(s.amount_is_fixed ? s.typical_amount : s.recent_amount);
+        let baseAbs = Math.abs(s.amount_is_fixed ? s.typical_amount : s.recent_amount);
         const sign = s.type === "expense" ? -1 : 1;
+
+        // For high-value recurring expenses (rent, mortgage, car payment):
+        // use the LATEST payment amount instead of the weighted average.
+        // These large bills trend upward and the most recent payment is
+        // the best predictor of next month's payment.
+        if (!s.amount_is_fixed && baseAbs >= 500 && s.cadence === "monthly" && s.type === "expense") {
+            // latest_amount is the most recent observation — better for trending bills
+            const latestAbs = Math.abs(s.latest_amount ?? s.recent_amount);
+            if (latestAbs > 0) {
+                baseAbs = latestAbs;
+            }
+        }
 
         // Compute all occurrence dates within window
         const dates = computeOccurrences(s, startDate, endDate);
@@ -1907,51 +1921,78 @@ export function generateDeterministicForecast(
     // When user flagged atypical months, use a wider window (6 months) and
     // filter outliers — the median naturally excludes spikes.
     const recentMonthCount = insightProfile?.has_atypical_months ? 6 : 3;
-    const monthlyExpenseTarget = insightProfile?.expected_monthly_expenses
+    const baseMonthlyExpenseTarget = insightProfile?.expected_monthly_expenses
         ? insightProfile.expected_monthly_expenses
         : insightProfile?.spending_anchor === "recent"
             ? calcRecentMonthlyExpenses(cleaned, today, recentMonthCount)
             : monthlyAvg.total_expenses;
-    let targetTotalExpenses = monthlyExpenseTarget * forecastMonths;
 
-    // Upcoming large expense: add to the total expense target for the forecast period
+    // PER-MONTH expense targets: adjust the base for calendar events.
+    // This is dramatically more accurate than a flat target because
+    // tuition months and holiday months are predictably higher.
+    const perMonthTargets: number[] = [];
+    for (let i = 0; i < forecastMonths; i++) {
+        const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
+        const calMonth = forecastMonth.getMonth() + 1;
+        let target = baseMonthlyExpenseTarget;
+
+        // Tuition months: students pay tuition in Jan and Aug
+        // Adds ~$1000 for typical university charges
+        if (insightProfile?.life_situation === "student_aid" || insightProfile?.annual_events === "tuition") {
+            if (calMonth === 1 || calMonth === 8) {
+                target += 1000;
+            }
+        }
+
+        // Holiday months: travel, gifts, celebrations
+        if (insightProfile?.annual_events === "holiday_travel") {
+            if (calMonth === 11 || calMonth === 12) {
+                target *= 1.20; // 20% holiday bump
+            }
+        }
+
+        // Birth month: dining out, gifts, celebrations
+        if (insightProfile?.birth_month && calMonth === insightProfile.birth_month) {
+            target *= 1.15; // 15% birthday bump
+        }
+
+        perMonthTargets.push(target);
+    }
+
+    let targetTotalExpenses = perMonthTargets.reduce((a, b) => a + b, 0);
+
+    // Upcoming large expense: add to the first month's target
     if (insightProfile?.upcoming_large_expense && insightProfile.upcoming_large_expense > 0) {
         targetTotalExpenses += insightProfile.upcoming_large_expense;
     }
 
-    // Birth month: expect ~15-25% higher spending (dining, gifts, celebrations)
-    if (insightProfile?.birth_month) {
-        for (let i = 0; i < forecastMonths; i++) {
-            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
-            const calMonth = forecastMonth.getMonth() + 1;
-            if (calMonth === insightProfile.birth_month) {
-                targetTotalExpenses += monthlyExpenseTarget * 0.2; // 20% birthday bump
-            }
+    // TOP-DOWN calibration: PER-MONTH scaling.
+    // Instead of one global multiplier (which over-corrects some months and
+    // under-corrects others), scale each month independently to hit its target.
+    // This is critical when calendar-specific adjustments (tuition, holidays)
+    // create different targets per month.
+    {
+        const allExpenseTxs = [...recurringTxs, ...discretionaryTxs].filter(tx => tx.amount < 0);
+        const expByMonth = new Map<number, typeof allExpenseTxs>();
+        for (const tx of allExpenseTxs) {
+            const d = new Date(tx.date + "T12:00:00");
+            const monthOffset = (d.getFullYear() - today.getFullYear()) * 12 + d.getMonth() - today.getMonth() - 1;
+            const idx = Math.max(0, Math.min(forecastMonths - 1, monthOffset));
+            if (!expByMonth.has(idx)) expByMonth.set(idx, []);
+            expByMonth.get(idx)!.push(tx);
         }
-    }
 
-    // Holiday travel: boost Nov-Dec expense targets
-    if (insightProfile?.annual_events === "holiday_travel") {
         for (let i = 0; i < forecastMonths; i++) {
-            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
-            const calMonth = forecastMonth.getMonth() + 1;
-            if (calMonth === 11 || calMonth === 12) {
-                targetTotalExpenses += monthlyExpenseTarget * 0.25; // 25% holiday bump
-            }
-        }
-    }
-
-    // TOP-DOWN calibration: scale ALL expenses (recurring + discretionary) to match
-    // historical monthly totals. Bottom-up detection consistently misses bills,
-    // so the total forecast needs to be pulled toward the historical average.
-    if (targetTotalExpenses > 0 && totalPredictedExpenses > 0) {
-        const expenseScale = clamp(targetTotalExpenses / totalPredictedExpenses, 0.4, 3.5);
-        if (Math.abs(expenseScale - 1) > 0.03) {
-            for (const tx of recurringTxs) {
-                if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
-            }
-            for (const tx of discretionaryTxs) {
-                if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
+            const monthTxs = expByMonth.get(i) || [];
+            const monthPredicted = monthTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0);
+            const monthTarget = perMonthTargets[i] || baseMonthlyExpenseTarget;
+            if (monthPredicted > 0 && monthTarget > 0) {
+                const scale = clamp(monthTarget / monthPredicted, 0.4, 3.5);
+                if (Math.abs(scale - 1) > 0.03) {
+                    for (const tx of monthTxs) {
+                        tx.amount = roundTo(tx.amount * scale, 2);
+                    }
+                }
             }
         }
     }

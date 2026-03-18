@@ -177,6 +177,16 @@ const scenarios: { name: string; profile: InsightProfile | undefined }[] = [
             has_atypical_months: true,
         },
     },
+    {
+        name: "Full profile + holiday travel",
+        profile: {
+            regime_change_confirmed: true, spending_anchor: "recent",
+            expected_monthly_expenses: 3000, income_type: "freelance",
+            life_situation: "student_aid",
+            has_atypical_months: true,
+            annual_events: "holiday_travel",
+        },
+    },
 ];
 
 // Test months: 2025-04 through 2025-12 (need enough history for recent anchor)
