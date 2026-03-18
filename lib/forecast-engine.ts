@@ -104,7 +104,7 @@ const NOISE_MERCHANT_PATTERNS = [
     // Internal transfers that look like income but aren't
     /transfer\s*from\s*(chk|sav|checking|savings)/i,
     /online\s*(realtime\s*)?transfer\s*(from|to)/i,
-    /remote\s*online\s*deposit/i,
+    /remote\s*online\s*deposit/i, // Lumpy check deposits — real income but too sporadic for bottom-up scheduling. Multi-horizon model captures these via quarterly totals.
     /moneylink/i,               // Schwab MoneyLink transfers
     /^(schwab|fidelity|vanguard|etrade)\b/i, // Brokerage transfers
     // Note: Venmo/PayPal/CashApp cashouts are kept as income — for freelancers,
@@ -1986,8 +1986,44 @@ export function generateDeterministicForecast(
         allVariableIncome = scaledVariableIncome;
     }
 
+    // ── Income floor: inject catch-up if bottom-up falls far short of target ──
+    // The per-month scaling can only do 1.4x. If the scheduler generated very
+    // little income (< 80% of target), inject a single "Expected Income" tx
+    // to close the gap. This captures lumpy income the scheduler can't model.
+    const incomeFillTxs: PredictedTransaction[] = [];
+    {
+        const incomeByMonth = new Map<string, number>();
+        for (const tx of [...recurringTxs.filter(t => t.amount > 0), ...allVariableIncome]) {
+            const m = tx.date.substring(0, 7);
+            incomeByMonth.set(m, (incomeByMonth.get(m) || 0) + tx.amount);
+        }
+        for (let i = 0; i < forecastMonths; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth() + 1 + i, 15);
+            const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const predicted = incomeByMonth.get(monthStr) || 0;
+            const target = (seasonalIncomeTargets[i] || 0) * incomeHaircut;
+            // Only fill if predicted is less than 80% of target, gap is meaningful,
+            // AND the multi-horizon model has high confidence for this month
+            const conf = multiHorizonConfidence[i] || "low";
+            if (target > 0 && predicted < target * 0.8 && conf === "high") {
+                const gap = target - predicted;
+                if (gap > 50) {
+                    incomeFillTxs.push({
+                        date: `${monthStr}-15`,
+                        day_of_week: DAY_NAMES[d.getDay()],
+                        merchant: "Expected Income",
+                        amount: roundTo(gap, 2),
+                        category: "Income",
+                        type: "income",
+                        confidence_score: "low",
+                    });
+                }
+            }
+        }
+    }
+
     // Merge and sort
-    const all = [...recurringTxs, ...discretionaryTxs, ...allVariableIncome]
+    const all = [...recurringTxs, ...discretionaryTxs, ...allVariableIncome, ...incomeFillTxs]
         .sort((a, b) => a.date.localeCompare(b.date));
 
     // Dedup: same merchant + date + rounded amount
