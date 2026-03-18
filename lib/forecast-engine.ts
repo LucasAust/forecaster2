@@ -1927,17 +1927,55 @@ export function generateDeterministicForecast(
             ? calcRecentMonthlyExpenses(cleaned, today, recentMonthCount)
             : monthlyAvg.total_expenses;
 
-    // PER-MONTH expense targets: adjust the base for calendar events.
-    // This is dramatically more accurate than a flat target because
-    // tuition months and holiday months are predictably higher.
+    // ── Build per-month expense targets covering ALL calendar months in the
+    //    forecast window, including the current partial month. ──
+    // For a mid-month forecast (e.g., March 15 → June 13), we need targets for:
+    //   March (partial: 16 forecast days / 31 total), April (full), May (full),
+    //   June (partial: 13/30). Each target is scaled by the fraction of the month
+    //   that falls within the forecast window so the scaler doesn't try to cram
+    //   a full month's spending into a partial month.
+    const forecastStartDate = start;  // addDays(today, 1)
+    const forecastEndDate = end;      // addDays(today, 90)
+
+    // Enumerate every calendar month touched by the forecast window.
+    // perMonthKeys[i] = "YYYY-MM", perMonthFractions[i] = fraction of that month in the window
+    const perMonthKeys: string[] = [];
+    const perMonthFractions: number[] = [];
+    {
+        let cursor = new Date(forecastStartDate.getFullYear(), forecastStartDate.getMonth(), 1);
+        while (cursor <= forecastEndDate) {
+            const y = cursor.getFullYear();
+            const m = cursor.getMonth(); // 0-indexed
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const monthStart = new Date(y, m, 1);
+            const monthEnd = new Date(y, m, daysInMonth);
+            // Clamp to forecast window
+            const effectiveStart = monthStart < forecastStartDate ? forecastStartDate : monthStart;
+            const effectiveEnd = monthEnd > forecastEndDate ? forecastEndDate : monthEnd;
+            const forecastDaysInMonth = Math.max(0,
+                Math.round((effectiveEnd.getTime() - effectiveStart.getTime()) / 86_400_000) + 1
+            );
+            const fraction = forecastDaysInMonth / daysInMonth;
+            if (fraction > 0) {
+                const key = `${y}-${String(m + 1).padStart(2, "0")}`;
+                perMonthKeys.push(key);
+                perMonthFractions.push(roundTo(fraction, 4));
+            }
+            // Advance to next month
+            cursor = new Date(y, m + 1, 1);
+        }
+    }
+    const actualForecastMonths = perMonthKeys.length;
+
+    // PER-MONTH expense targets: scale the base target by the fraction of the
+    // month that falls within the forecast window, then adjust for calendar events.
     const perMonthTargets: number[] = [];
-    for (let i = 0; i < forecastMonths; i++) {
-        const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
-        const calMonth = forecastMonth.getMonth() + 1;
-        let target = baseMonthlyExpenseTarget;
+    for (let i = 0; i < actualForecastMonths; i++) {
+        const calMonth = parseInt(perMonthKeys[i].split("-")[1], 10);
+        const fraction = perMonthFractions[i];
+        let target = baseMonthlyExpenseTarget * fraction;
 
         // Tuition months: students pay tuition in Jan and Aug.
-        // Auto-detect tuition amount from transaction history, or use $1200 default.
         if (insightProfile?.life_situation === "student_aid" || insightProfile?.annual_events === "tuition") {
             if (calMonth === 1 || calMonth === 8) {
                 const tuitionCharges = cleaned.filter(tx =>
@@ -1946,21 +1984,21 @@ export function generateDeterministicForecast(
                 );
                 const tuitionAmount = tuitionCharges.length > 0
                     ? Math.abs(tuitionCharges[tuitionCharges.length - 1].amount)
-                    : 1200; // Default if no tuition charge detected
-                target += tuitionAmount;
+                    : 1200;
+                target += tuitionAmount * fraction;
             }
         }
 
         // Holiday months: travel, gifts, celebrations
         if (insightProfile?.annual_events === "holiday_travel") {
             if (calMonth === 11 || calMonth === 12) {
-                target *= 1.20; // 20% holiday bump
+                target *= 1.20;
             }
         }
 
-        // Birth month: dining out, gifts, celebrations
+        // Birth month
         if (insightProfile?.birth_month && calMonth === insightProfile.birth_month) {
-            target *= 1.15; // 15% birthday bump
+            target *= 1.15;
         }
 
         perMonthTargets.push(target);
@@ -1983,21 +2021,20 @@ export function generateDeterministicForecast(
     );
 
     if (hasCalendarAdjustments) {
-        // Per-month scaling for calendar-aware forecasts
+        // Per-month scaling for calendar-aware forecasts — bucket by YYYY-MM key
         const allExpenseTxs = [...recurringTxs, ...discretionaryTxs].filter(tx => tx.amount < 0);
-        const expByMonth = new Map<number, typeof allExpenseTxs>();
+        const expByMonthKey = new Map<string, typeof allExpenseTxs>();
         for (const tx of allExpenseTxs) {
-            const d = new Date(tx.date + "T12:00:00");
-            const monthOffset = (d.getFullYear() - today.getFullYear()) * 12 + d.getMonth() - today.getMonth() - 1;
-            const idx = Math.max(0, Math.min(forecastMonths - 1, monthOffset));
-            if (!expByMonth.has(idx)) expByMonth.set(idx, []);
-            expByMonth.get(idx)!.push(tx);
+            const m = tx.date.substring(0, 7); // "YYYY-MM"
+            if (!expByMonthKey.has(m)) expByMonthKey.set(m, []);
+            expByMonthKey.get(m)!.push(tx);
         }
 
-        for (let i = 0; i < forecastMonths; i++) {
-            const monthTxs = expByMonth.get(i) || [];
+        for (let i = 0; i < actualForecastMonths; i++) {
+            const key = perMonthKeys[i];
+            const monthTxs = expByMonthKey.get(key) || [];
             const monthPredicted = monthTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0);
-            const monthTarget = perMonthTargets[i] || baseMonthlyExpenseTarget;
+            const monthTarget = perMonthTargets[i] || baseMonthlyExpenseTarget * perMonthFractions[i];
             if (monthPredicted > 0 && monthTarget > 0) {
                 const maxScale = insightProfile?.expected_monthly_expenses ? 5.0 : 3.5;
                 const scale = clamp(monthTarget / monthPredicted, 0.4, maxScale);

@@ -169,6 +169,19 @@ export function FinancialHealthScore() {
         return <SkeletonHealthScore />;
     }
 
+    // Don't show anything if there's no meaningful data yet
+    if (!transactions?.length && !accounts?.length) {
+        return (
+            <div className="glass-card rounded-2xl p-6">
+                <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                    <Shield size={18} className="text-blue-400" />
+                    Financial Health Score
+                </h2>
+                <p className="text-zinc-500 text-sm">Connect your bank account to see your financial health score.</p>
+            </div>
+        );
+    }
+
     const { label: scoreLabel, color: labelColor } = getScoreLabel(totalScore);
     const gaugeColor = getScoreColor(totalScore);
 

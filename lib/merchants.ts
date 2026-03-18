@@ -249,10 +249,12 @@ export function getDisplayMerchant(tx: {
     const raw = tx.merchant_name || tx.name || tx.merchant || "";
     const cleaned = cleanMerchantName(raw);
 
-    // For predicted transactions with low/medium confidence, show category
-    // instead of a fake merchant name. High-confidence recurring items
-    // (subscriptions, rent, utilities) keep their real merchant names.
-    if (tx.type === "predicted" && tx.confidence_score !== "high") {
+    // Always show the actual merchant name when available.
+    // Previously, non-high-confidence predicted transactions showed the category
+    // (e.g. "Subscriptions") instead of the real merchant name (e.g. "Netflix").
+    // The merchant name is always more useful — users want to see what they're
+    // paying, not a generic category label.
+    if (!cleaned || cleaned === "Unknown Merchant") {
         const cat = Array.isArray(tx.category) ? tx.category[0] : (tx.category || "");
         if (cat && cat !== "Other") return cat;
     }

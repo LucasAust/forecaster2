@@ -36,27 +36,35 @@ export function ForecastCalendar() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                    {days.map((day, index) => (
-                        <tr key={index} className="hover:bg-zinc-800/50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-white">
-                                {new Date(day.fullDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                <div className="text-xs text-zinc-500 font-normal mt-0.5">
-                                    {day.transactions.map((t) => 
-                                        t.confidence_score === "high" ? t.merchant : (t.category || t.merchant)
-                                    ).join(", ")}
-                                </div>
+                    {days.map((day, index) => {
+                        // Show each transaction as its own row for same-day clarity
+                        const txRows = day.transactions.length > 0 ? day.transactions : [null];
+                        return txRows.map((tx, txIdx) => (
+                        <tr key={`${index}-${txIdx}`} className="hover:bg-zinc-800/50 transition-colors">
+                            <td className="px-6 py-3 font-medium text-white">
+                                {txIdx === 0 ? (
+                                    <span>{new Date(day.fullDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                ) : (
+                                    <span className="text-zinc-600">↳</span>
+                                )}
+                                {tx && (
+                                    <span className="text-xs text-zinc-400 font-normal ml-2">
+                                        {tx.confidence_score === "high" ? tx.merchant : (tx.category || tx.merchant || "Transaction")}
+                                    </span>
+                                )}
                             </td>
-                            <td className="px-6 py-4 text-emerald-500">
-                                {day.dailyIncome > 0 ? `+$${day.dailyIncome.toFixed(2)}` : "-"}
+                            <td className="px-6 py-3 text-emerald-500">
+                                {tx && tx.amount > 0 ? `+$${tx.amount.toFixed(2)}` : (txIdx === 0 && day.dailyIncome > 0 && !tx) ? `+$${day.dailyIncome.toFixed(2)}` : "-"}
                             </td>
-                            <td className="px-6 py-4 text-rose-500">
-                                {day.dailyExpenses > 0 ? `-$${day.dailyExpenses.toFixed(2)}` : "-"}
+                            <td className="px-6 py-3 text-rose-500">
+                                {tx && tx.amount < 0 ? `-$${Math.abs(tx.amount).toFixed(2)}` : (txIdx === 0 && day.dailyExpenses > 0 && !tx) ? `-$${day.dailyExpenses.toFixed(2)}` : "-"}
                             </td>
-                            <td className="px-6 py-4 text-white font-medium">
-                                ${day.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            <td className="px-6 py-3 text-white font-medium">
+                                {txIdx === 0 ? `$${day.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ""}
                             </td>
                         </tr>
-                    ))}
+                        ));
+                    })}
                 </tbody>
             </table>
         </div>

@@ -7,9 +7,10 @@ import type { InsightQuestion, InsightAnswer } from "@/lib/insight-questions";
 
 interface Props {
     onComplete?: () => void; // Called after all questions answered — trigger re-forecast
+    showBeforeBank?: boolean; // Show onboarding questions before bank connection
 }
 
-export function InsightQuestionsModal({ onComplete }: Props) {
+export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
     const [questions, setQuestions] = useState<InsightQuestion[]>([]);
     const [step, setStep] = useState(0);
     const [answers, setAnswers] = useState<InsightAnswer[]>([]);
@@ -23,8 +24,15 @@ export function InsightQuestionsModal({ onComplete }: Props) {
         let cancelled = false;
         (async () => {
             try {
+                // Check if user has already completed onboarding questions
+                const completedKey = "arc-insight-onboarding-done";
+                if (!showBeforeBank) {
+                    const done = localStorage.getItem(completedKey);
+                    if (done) { if (!cancelled) setLoaded(true); return; }
+                }
+
                 const res = await fetch("/api/insights/questions");
-                if (!res.ok) return;
+                if (!res.ok) { if (!cancelled) setLoaded(true); return; }
                 const data = await res.json();
                 if (!cancelled && Array.isArray(data.questions) && data.questions.length > 0) {
                     setQuestions(data.questions);
@@ -36,7 +44,7 @@ export function InsightQuestionsModal({ onComplete }: Props) {
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [showBeforeBank]);
 
     const submitAll = useCallback(async (allAnswers: InsightAnswer[]) => {
         setSubmitting(true);
@@ -51,6 +59,8 @@ export function InsightQuestionsModal({ onComplete }: Props) {
         }
         setSubmitting(false);
         setDone(true);
+        // Mark onboarding as complete so we don't show again until bank is connected
+        try { localStorage.setItem("arc-insight-onboarding-done", "1"); } catch {}
         // Give user a moment to see the success state, then close and trigger re-forecast
         setTimeout(() => {
             setQuestions([]);
@@ -62,6 +72,15 @@ export function InsightQuestionsModal({ onComplete }: Props) {
 
     const total = questions.length;
     const currentQ = questions[step];
+
+    // Safety: if current question is somehow invalid, skip it
+    if (!currentQ || !currentQ.question || !currentQ.options?.length) {
+        if (step < total - 1) {
+            setStep(s => s + 1);
+            return null;
+        }
+        return null;
+    }
 
     const handleAnswer = (value: string) => {
         const newAnswer: InsightAnswer = {

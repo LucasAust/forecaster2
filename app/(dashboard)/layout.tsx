@@ -24,8 +24,8 @@ export default function DashboardLayout({
                 <AlertEngine />
                 {/* Clarification modal — shown automatically after a fresh bank connection */}
                 <TransactionClarificationModal />
-                {/* Insight questions — data-driven questions to improve forecast accuracy */}
-                <InsightQuestionsModal />
+                {/* Insight questions — shown during onboarding AND after bank connection */}
+                <InsightQuestionsModal showBeforeBank />
                 <div className="flex min-h-screen">
                     {/* Desktop sidebar — hidden on mobile */}
                     <div className="hidden md:block">

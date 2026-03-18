@@ -11,9 +11,9 @@ const SyncContext = createContext<SyncState | undefined>(undefined);
 function calculateBalance(accounts: PlaidAccount[]): number {
     return accounts.reduce((acc, account) => {
         const bal = account.balances.current || 0;
-        if (account.type === 'depository' || account.type === 'investment') return acc + bal;
         if (account.type === 'credit' || account.type === 'loan') return acc - bal;
-        return acc;
+        // depository, investment, brokerage, other — all treated as assets
+        return acc + bal;
     }, 0);
 }
 

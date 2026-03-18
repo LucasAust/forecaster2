@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { useSync } from "@/contexts/SyncContext";
 import { CreditCard, Plus, Trash2, TrendingDown, Calculator, ChevronDown, ChevronUp } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -88,6 +89,7 @@ function calculatePayoff(debts: Debt[], extraPayment: number, strategy: Strategy
 
 export function DebtPayoffPlanner() {
     const { prefs, loaded, setPref } = usePreferences();
+    const { accounts } = useSync();
     const [debts, setDebts] = useState<Debt[]>([]);
     const [strategy, setStrategy] = useState<Strategy>("avalanche");
     const [extraPayment, setExtraPayment] = useState(100);
@@ -95,17 +97,35 @@ export function DebtPayoffPlanner() {
     const [expandedView, setExpandedView] = useState(false);
 
     useEffect(() => {
-        if (loaded && prefs.debt_plans) {
-            setDebts(prefs.debt_plans.map(d => ({
+        if (loaded && prefs.debt_plans && prefs.debt_plans.length > 0) {
+            // Use saved debt plans
+            setDebts(prefs.debt_plans.map((d, i) => ({
                 id: d.id,
                 name: d.name,
                 balance: d.balance,
                 rate: d.apr,
                 minPayment: d.minPayment,
-                color: COLORS[0],
+                color: COLORS[i % COLORS.length],
             })));
+        } else if (loaded && accounts.length > 0) {
+            // Auto-populate from Plaid credit/loan accounts
+            const debtAccounts = accounts.filter(a =>
+                (a.type === 'credit' || a.type === 'loan') &&
+                (a.balances?.current || 0) > 0
+            );
+            if (debtAccounts.length > 0) {
+                const autoDebts: Debt[] = debtAccounts.map((acc, i) => ({
+                    id: acc.account_id || `auto-${i}`,
+                    name: acc.official_name || acc.name || `${acc.type} ••${acc.mask || ''}`,
+                    balance: Math.abs(acc.balances?.current || 0),
+                    rate: acc.type === 'credit' ? 22.9 : 6.5, // Typical APRs
+                    minPayment: Math.max(25, Math.abs(acc.balances?.current || 0) * 0.02), // 2% or $25 min
+                    color: COLORS[i % COLORS.length],
+                }));
+                setDebts(autoDebts);
+            }
         }
-    }, [loaded, prefs.debt_plans]);
+    }, [loaded, prefs.debt_plans, accounts]);
 
     const persist = useCallback((updated: Debt[]) => {
         setDebts(updated);

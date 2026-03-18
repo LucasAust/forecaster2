@@ -48,7 +48,7 @@ export function IncomeTracker() {
         for (const tx of transactions) {
             if (tx.amount >= 0) continue; // Only income (negative in Plaid convention)
             const amt = Math.abs(tx.amount);
-            if (amt < 100) continue; // Filter out tiny refunds
+            if (amt < 20) continue; // Filter out tiny refunds/interest
 
             const merchant = getDisplayMerchant(tx);
             const key = merchant.toLowerCase().replace(/[^a-z0-9]/g, "");

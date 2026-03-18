@@ -789,7 +789,15 @@ export function generateInsightQuestions(
 
     // Sort by priority, take top 5
     questions.sort((a, b) => a.priority - b.priority);
-    return questions.slice(0, 5);
+
+    // Validate: remove any questions with empty text or no options
+    const valid = questions.filter(q =>
+        q.question && q.question.trim().length > 0 &&
+        Array.isArray(q.options) && q.options.length > 0 &&
+        q.options.every(o => o.label && o.label.trim().length > 0)
+    );
+
+    return valid.slice(0, 5);
 }
 
 /**
