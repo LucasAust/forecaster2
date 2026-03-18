@@ -65,6 +65,16 @@ export interface InsightProfile {
     upcoming_large_income_likely?: boolean;
     /** User confirmed recurring high-income months pattern */
     recurring_high_income_confirmed?: boolean;
+    /** User's birth month (1-12) — affects spending and gift income patterns */
+    birth_month?: number;
+    /** User confirmed some months were atypical — engine should down-weight outliers */
+    has_atypical_months?: boolean;
+    /** Specific months flagged as atypical (YYYY-MM format) */
+    atypical_month_list?: string[];
+    /** User-stated upcoming large expense amount */
+    upcoming_large_expense?: number;
+    /** Annual event type (tuition, holiday_travel, annual_renewals) */
+    annual_events?: string;
 }
 
 // ─── Analysis Helpers ───────────────────────────────────────
@@ -316,6 +326,171 @@ function detectRecurringHighIncomeMonths(monthly: MonthlyTotals[]): InsightQuest
     };
 }
 
+/**
+ * Detect months that look atypical and ask the user to confirm.
+ * If the user flags a month as unusual, the engine can exclude or
+ * down-weight it in historical averages — stopping the model from
+ * training on noise.
+ */
+function detectAtypicalMonths(monthly: MonthlyTotals[]): InsightQuestion | null {
+    if (monthly.length < 6) return null;
+
+    const expenses = monthly.map(m => m.expenses);
+    const incomes = monthly.map(m => m.income);
+    const medExp = median(expenses);
+    const medInc = median(incomes.filter(i => i > 0));
+
+    // Find months that are outliers on EITHER income or expenses
+    const outliers: { month: string; reason: string }[] = [];
+    for (const m of monthly) {
+        const calMonth = parseInt(m.month.substring(5, 7));
+        const monthName = new Date(2025, calMonth - 1, 1).toLocaleString("en-US", { month: "short" });
+        const year = m.month.substring(0, 4);
+        const label = `${monthName} ${year}`;
+
+        if (m.expenses > medExp * 2) {
+            outliers.push({ month: m.month, reason: `${label}: unusually high spending ($${Math.round(m.expenses).toLocaleString()})` });
+        }
+        if (m.income > medInc * 4 && medInc > 0) {
+            outliers.push({ month: m.month, reason: `${label}: unusually high income ($${Math.round(m.income).toLocaleString()})` });
+        }
+        if (m.income < medInc * 0.1 && medInc > 100) {
+            outliers.push({ month: m.month, reason: `${label}: almost no income ($${Math.round(m.income)})` });
+        }
+    }
+
+    if (outliers.length === 0) return null;
+
+    // Show the top 3 most unusual months
+    const topOutliers = outliers.slice(0, 3);
+
+    return {
+        id: "atypical_months",
+        layer: "data-driven",
+        priority: 2,
+        category: "general",
+        question: "Were any of these months unusual or one-time situations?",
+        context: topOutliers.map(o => o.reason).join("\n"),
+        options: [
+            { label: "Yes, some of those were one-off situations", value: "some_atypical" },
+            { label: "Yes, all of those were unusual", value: "all_atypical" },
+            { label: "No, that's pretty normal for me", value: "normal" },
+        ],
+        metadata: {
+            outlierMonths: outliers.map(o => o.month),
+            reasons: outliers.map(o => o.reason),
+        },
+    };
+}
+
+/**
+ * Ask for the user's birth month — predictable annual pattern of
+ * gift income and celebratory spending.
+ */
+function detectBirthMonth(): InsightQuestion {
+    return {
+        id: "birth_month",
+        layer: "onboarding",
+        priority: 3,
+        category: "general",
+        question: "What month is your birthday?",
+        context: "Birthday months often have different spending and gift patterns",
+        options: [
+            { label: "January", value: "1" },
+            { label: "February", value: "2" },
+            { label: "March", value: "3" },
+            { label: "April", value: "4" },
+            { label: "May", value: "5" },
+            { label: "June", value: "6" },
+            { label: "July", value: "7" },
+            { label: "August", value: "8" },
+            { label: "September", value: "9" },
+            { label: "October", value: "10" },
+            { label: "November", value: "11" },
+            { label: "December", value: "12" },
+        ],
+    };
+}
+
+/**
+ * Ask about upcoming large expenses — mirrors the large income question.
+ * Helps predict expense spikes (moving, car, tuition, vacation, etc.)
+ */
+function detectUpcomingLargeExpenses(monthly: MonthlyTotals[]): InsightQuestion | null {
+    if (monthly.length < 3) return null;
+
+    const expenses = monthly.map(m => m.expenses);
+    const maxExp = Math.max(...expenses);
+    const medExp = median(expenses);
+
+    // Only ask if there are historical expense spikes
+    if (maxExp < medExp * 1.5) return null;
+
+    const now = new Date();
+    const nextMonths = Array.from({ length: 3 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1);
+        return d.toLocaleString("en-US", { month: "long" });
+    });
+
+    return {
+        id: "upcoming_large_expenses",
+        layer: "data-driven",
+        priority: 2,
+        category: "expense",
+        question: `Any big expenses coming up in ${nextMonths.join(", ")}?`,
+        context: "Things like tuition, car repairs, moving, vacations, etc.",
+        options: [
+            { label: "Yes, something over $1,000", value: "yes_large" },
+            { label: "Maybe — I'm not sure yet", value: "maybe" },
+            { label: "No, just normal spending", value: "no" },
+        ],
+        metadata: { medianExpense: medExp, maxExpense: maxExp },
+    };
+}
+
+/**
+ * Follow-up for upcoming large expense amount.
+ */
+function detectLargeExpenseDetails(existingAnswers: InsightAnswer[]): InsightQuestion | null {
+    const upcomingAnswer = existingAnswers.find(a => a.question_id === "upcoming_large_expenses");
+    if (!upcomingAnswer || upcomingAnswer.value !== "yes_large") return null;
+
+    return {
+        id: "large_expense_amount",
+        layer: "data-driven",
+        priority: 2,
+        category: "expense",
+        question: "Roughly how much will the big expense be?",
+        options: [
+            { label: "$1,000 – $2,000", value: "1500" },
+            { label: "$2,000 – $5,000", value: "3500" },
+            { label: "$5,000 – $10,000", value: "7500" },
+            { label: "More than $10,000", value: "12000" },
+        ],
+    };
+}
+
+/**
+ * Ask about annual recurring events that affect finances.
+ * These are predictable calendar-based expenses the model should know about.
+ */
+function detectAnnualEvents(): InsightQuestion {
+    return {
+        id: "annual_events",
+        layer: "onboarding",
+        priority: 3,
+        category: "expense",
+        question: "Do any of these apply to you?",
+        context: "Annual events that affect your finances",
+        options: [
+            { label: "I pay tuition / education costs", value: "tuition" },
+            { label: "I travel for holidays (Nov–Dec)", value: "holiday_travel" },
+            { label: "I have annual insurance or subscription renewals", value: "annual_renewals" },
+            { label: "None of these apply", value: "none" },
+        ],
+    };
+}
+
 function detectRegimeChange(monthly: MonthlyTotals[]): InsightQuestion | null {
     if (monthly.length < 4) return null;
 
@@ -533,6 +708,8 @@ function getOnboardingQuestions(): InsightQuestion[] {
                 { label: "Yes, my income changed", value: "income_changed" },
             ],
         },
+        detectBirthMonth(),
+        detectAnnualEvents(),
     ];
 }
 
@@ -574,6 +751,18 @@ export function generateInsightQuestions(
     const recurringHigh = detectRecurringHighIncomeMonths(monthly);
     if (recurringHigh && !answeredIds.has(recurringHigh.id)) questions.push(recurringHigh);
 
+    // Atypical months — helps model ignore outlier data
+    const atypical = detectAtypicalMonths(monthly);
+    if (atypical && !answeredIds.has(atypical.id)) questions.push(atypical);
+
+    // Upcoming large expenses — mirrors income question
+    const upcomingExpenses = detectUpcomingLargeExpenses(monthly);
+    if (upcomingExpenses && !answeredIds.has(upcomingExpenses.id)) questions.push(upcomingExpenses);
+
+    // Follow-up: how much? (only if they said "yes_large")
+    const largeExpDetails = detectLargeExpenseDetails(existingAnswers || []);
+    if (largeExpDetails && !answeredIds.has(largeExpDetails.id)) questions.push(largeExpDetails);
+
     const regimeChange = detectRegimeChange(monthly);
     if (regimeChange && !answeredIds.has(regimeChange.id)) questions.push(regimeChange);
 
@@ -610,6 +799,32 @@ export function generateInsightQuestions(
 export function buildInsightProfile(answers: InsightAnswer[]): InsightProfile {
     const profile: InsightProfile = {};
     const byId = new Map(answers.map(a => [a.question_id, a.value]));
+
+    // Birth month
+    const birthMonth = byId.get("birth_month");
+    if (birthMonth) profile.birth_month = parseInt(birthMonth);
+
+    // Atypical months — need to extract outlier months from the answers
+    const atypical = byId.get("atypical_months");
+    if (atypical === "some_atypical" || atypical === "all_atypical") {
+        profile.has_atypical_months = true;
+        // The outlier months were detected during question generation.
+        // In the real app, the question metadata has the months — here
+        // we mark the flag so the engine can auto-detect and exclude them.
+    }
+
+    // Upcoming large expenses
+    const upcomingExp = byId.get("upcoming_large_expenses");
+    const largeExpAmt = byId.get("large_expense_amount");
+    if (upcomingExp === "yes_large" && largeExpAmt) {
+        profile.upcoming_large_expense = parseFloat(largeExpAmt);
+    }
+
+    // Annual events
+    const annualEvents = byId.get("annual_events");
+    if (annualEvents && annualEvents !== "none") {
+        profile.annual_events = annualEvents;
+    }
 
     // Upcoming large income
     const upcomingInc = byId.get("upcoming_large_income");

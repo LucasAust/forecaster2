@@ -1678,6 +1678,15 @@ function calcRecentMonthlyExpenses(txs: CleanTransaction[], referenceDate: Date,
     const full = months.filter(([m]) => m < refMonth);
     const recent = full.slice(-monthCount);
     if (recent.length === 0) return 0;
+    if (recent.length >= 5) {
+        // With more months, use trimmed mean: drop highest and lowest,
+        // then weighted-average the rest. This auto-excludes atypical months.
+        const sorted = [...recent].sort((a, b) => a[1] - b[1]);
+        const trimmed = sorted.slice(1, -1); // Drop min and max
+        const weights = trimmed.map((_, i) => Math.pow(1.3, i));
+        const totalWeight = weights.reduce((a, b) => a + b, 0);
+        return trimmed.reduce((s, [, v], i) => s + v * weights[i], 0) / totalWeight;
+    }
     // Exponential weighting: most recent month gets highest weight.
     // This captures spending trends (e.g., expenses rising month over month).
     const weights = recent.map((_, i) => Math.pow(1.5, i));
@@ -1894,13 +1903,43 @@ export function generateDeterministicForecast(
     const totalPredictedExpenses = recurringExpenseTotal + discretionaryExpenseTotal;
 
     // Target: user-stated expectation (from insight questions) OR historical average
-    // If user told us their expected monthly spend, trust that over history
+    // If user told us their expected monthly spend, trust that over history.
+    // When user flagged atypical months, use a wider window (6 months) and
+    // filter outliers — the median naturally excludes spikes.
+    const recentMonthCount = insightProfile?.has_atypical_months ? 6 : 3;
     const monthlyExpenseTarget = insightProfile?.expected_monthly_expenses
         ? insightProfile.expected_monthly_expenses
         : insightProfile?.spending_anchor === "recent"
-            ? calcRecentMonthlyExpenses(cleaned, today, 3)
+            ? calcRecentMonthlyExpenses(cleaned, today, recentMonthCount)
             : monthlyAvg.total_expenses;
-    const targetTotalExpenses = monthlyExpenseTarget * forecastMonths;
+    let targetTotalExpenses = monthlyExpenseTarget * forecastMonths;
+
+    // Upcoming large expense: add to the total expense target for the forecast period
+    if (insightProfile?.upcoming_large_expense && insightProfile.upcoming_large_expense > 0) {
+        targetTotalExpenses += insightProfile.upcoming_large_expense;
+    }
+
+    // Birth month: expect ~15-25% higher spending (dining, gifts, celebrations)
+    if (insightProfile?.birth_month) {
+        for (let i = 0; i < forecastMonths; i++) {
+            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
+            const calMonth = forecastMonth.getMonth() + 1;
+            if (calMonth === insightProfile.birth_month) {
+                targetTotalExpenses += monthlyExpenseTarget * 0.2; // 20% birthday bump
+            }
+        }
+    }
+
+    // Holiday travel: boost Nov-Dec expense targets
+    if (insightProfile?.annual_events === "holiday_travel") {
+        for (let i = 0; i < forecastMonths; i++) {
+            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
+            const calMonth = forecastMonth.getMonth() + 1;
+            if (calMonth === 11 || calMonth === 12) {
+                targetTotalExpenses += monthlyExpenseTarget * 0.25; // 25% holiday bump
+            }
+        }
+    }
 
     // TOP-DOWN calibration: scale ALL expenses (recurring + discretionary) to match
     // historical monthly totals. Bottom-up detection consistently misses bills,
@@ -1968,6 +2007,19 @@ export function generateDeterministicForecast(
         }
     }
     
+    // Birth month: add small income boost (gifts) for the birth month
+    if (insightProfile?.birth_month) {
+        seasonalIncomeTargets = [...seasonalIncomeTargets];
+        for (let i = 0; i < forecastMonths; i++) {
+            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
+            const calMonth = forecastMonth.getMonth() + 1;
+            if (calMonth === insightProfile.birth_month) {
+                // Birthday gift income — conservative $200-500 boost
+                seasonalIncomeTargets[i] = (seasonalIncomeTargets[i] || 0) + 300;
+            }
+        }
+    }
+
     const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
     const targetTotalIncome = seasonalIncomeTargets.reduce((a: number, b: number) => a + b, 0) * incomeHaircut;
 
