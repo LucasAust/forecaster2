@@ -46,9 +46,17 @@ export interface PredictedTransaction {
     confidence_score: 'high' | 'medium' | 'low';
 }
 
+export interface ConfidenceBand {
+    month: string;
+    income: { p10: number; p50: number; p90: number };
+    expenses: { p10: number; p50: number; p90: number };
+    net: { p10: number; p50: number; p90: number };
+}
+
 export interface Forecast {
     forecast_period_days: number;
     predicted_transactions: PredictedTransaction[];
+    confidence_bands?: ConfidenceBand[];
 }
 
 export interface ForecastTimelinePoint {

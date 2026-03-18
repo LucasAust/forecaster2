@@ -9,6 +9,8 @@ import { PageTransition } from "@/components/MotionWrappers";
 
 import { ForecastAccuracy } from "@/components/ForecastAccuracy";
 import { RecurringTransactions } from "@/components/RecurringTransactions";
+import { ConfidenceBands } from "@/components/ConfidenceBands";
+import { useSync } from "@/contexts/SyncContext";
 
 // Lazy-load below-fold heavy components
 const ForecastCalendar = dynamic(() => import("@/components/ForecastCalendar").then(m => ({ default: m.ForecastCalendar })), { loading: () => <div className="h-48 animate-pulse rounded-xl bg-zinc-800/50" /> });
@@ -16,6 +18,7 @@ const BillCalendar = dynamic(() => import("@/components/BillCalendar").then(m =>
 
 export default function ForecastPage() {
     const [forecastDays, setForecastDays] = useState(30);
+    const { forecast } = useSync();
 
     return (
         <PageTransition className="space-y-8">
@@ -89,6 +92,12 @@ export default function ForecastPage() {
                     </ErrorBoundary>
                 </div>
             </div>
+
+            {forecast?.confidence_bands && forecast.confidence_bands.length > 0 && (
+                <ErrorBoundary fallbackTitle="Confidence bands failed to load">
+                    <ConfidenceBands bands={forecast.confidence_bands} />
+                </ErrorBoundary>
+            )}
         </PageTransition>
     );
 }

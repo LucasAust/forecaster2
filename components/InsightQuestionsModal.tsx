@@ -100,7 +100,7 @@ export function InsightQuestionsModal({ onComplete }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <AnimatePresence mode="wait">
                 {done ? (
                     <motion.div
@@ -121,11 +121,11 @@ export function InsightQuestionsModal({ onComplete }: Props) {
                 ) : (
                     <motion.div
                         key={`question-${step}`}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -16 }}
-                        transition={{ duration: 0.22, ease: "easeOut" }}
-                        className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+                        initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.97 }}
+                        transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+                        className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -161,7 +161,11 @@ export function InsightQuestionsModal({ onComplete }: Props) {
                         {/* Context (if available) */}
                         {currentQ.context && (
                             <div className="mx-5 mt-4 p-3 bg-zinc-800/50 rounded-xl border border-zinc-700/50">
-                                <p className="text-zinc-400 text-xs">{currentQ.context}</p>
+                                {currentQ.context.split("\n").map((line, i) => (
+                                    <p key={i} className="text-zinc-400 text-xs">
+                                        {line}
+                                    </p>
+                                ))}
                             </div>
                         )}
 
@@ -171,15 +175,21 @@ export function InsightQuestionsModal({ onComplete }: Props) {
                         </p>
 
                         {/* Answer options */}
-                        <div className="mx-5 mt-3 flex flex-col gap-2">
+                        <div className={`mx-5 mt-3 ${currentQ.options.length > 6 ? "grid grid-cols-3 gap-2" : "flex flex-col gap-2"}`}>
                             {currentQ.options.map((option, i) => (
                                 <button
                                     key={i}
                                     onClick={() => handleAnswer(option.value)}
-                                    className="flex items-center justify-between w-full px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-left text-sm text-zinc-200 hover:text-white transition-all group"
+                                    className={`${
+                                        currentQ.options.length > 6
+                                            ? "flex items-center justify-center px-2 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-center text-xs text-zinc-200 hover:text-white transition-all"
+                                            : "flex items-center justify-between w-full px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-left text-sm text-zinc-200 hover:text-white transition-all group"
+                                    }`}
                                 >
                                     <span>{option.label}</span>
-                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+                                    {currentQ.options.length <= 6 && (
+                                        <ChevronRight className="h-3.5 w-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -193,7 +203,7 @@ export function InsightQuestionsModal({ onComplete }: Props) {
                                 Skip
                             </button>
                             <p className="text-xs text-zinc-600">
-                                3-5 quick questions • dramatically improves accuracy
+                                A few quick questions • dramatically improves accuracy
                             </p>
                         </div>
                     </motion.div>

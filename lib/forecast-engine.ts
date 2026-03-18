@@ -23,7 +23,7 @@
 
 import { cleanMerchantName } from "./merchants";
 import { inferCategory } from "./categories";
-import type { Transaction, Forecast, PredictedTransaction } from "@/types";
+import type { Transaction, Forecast, PredictedTransaction, ConfidenceBand } from "@/types";
 
 // ─── Internal Types ─────────────────────────────────────────
 
@@ -2136,9 +2136,44 @@ export function generateDeterministicForecast(
         return true;
     });
 
+    // ── Confidence bands: group by month and compute P10/P50/P90 ranges ──
+    const bandsByMonth = new Map<string, { income: number; expenses: number }>();
+    for (const tx of deduped) {
+        const m = tx.date.substring(0, 7);
+        if (!bandsByMonth.has(m)) bandsByMonth.set(m, { income: 0, expenses: 0 });
+        const bucket = bandsByMonth.get(m)!;
+        if (tx.amount > 0) bucket.income += tx.amount;
+        else bucket.expenses += Math.abs(tx.amount);
+    }
+
+    const isSalary = insightProfile?.income_type === "salary";
+    const confidence_bands: ConfidenceBand[] = [...bandsByMonth.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, { income, expenses }]) => {
+            const incomeP10 = roundTo(income * (isSalary ? 0.85 : 0.4), 2);
+            const incomeP50 = roundTo(income, 2);
+            const incomeP90 = roundTo(income * (isSalary ? 1.15 : 2.5), 2);
+
+            const expensesP10 = roundTo(expenses * 0.75, 2);
+            const expensesP50 = roundTo(expenses, 2);
+            const expensesP90 = roundTo(expenses * 1.35, 2);
+
+            return {
+                month,
+                income: { p10: incomeP10, p50: incomeP50, p90: incomeP90 },
+                expenses: { p10: expensesP10, p50: expensesP50, p90: expensesP90 },
+                net: {
+                    p10: roundTo(incomeP10 - expensesP90, 2),
+                    p50: roundTo(incomeP50 - expensesP50, 2),
+                    p90: roundTo(incomeP90 - expensesP10, 2),
+                },
+            };
+        });
+
     return {
         forecast_period_days: 90,
         predicted_transactions: deduped,
+        confidence_bands,
     };
 }
 
