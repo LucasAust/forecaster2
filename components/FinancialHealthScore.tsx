@@ -58,42 +58,49 @@ export function FinancialHealthScore() {
         // Filter actual transactions (not predicted)
         const actual = transactions.filter((tx) => !tx.isPredicted && tx.date);
 
-        // This month's numbers
-        const thisMonthTxns = actual.filter((tx) => new Date(tx.date) >= thisMonth);
-        const income = thisMonthTxns.filter((tx) => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0);
-        const expenses = thisMonthTxns.filter((tx) => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0);
+        // Use 6-month average for income and expenses — much more stable
+        // than single-month for users with variable/lumpy income (students,
+        // freelancers who get big deposits every few months).
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        const recentTxns = actual.filter((tx) => new Date(tx.date) >= sixMonthsAgo);
+        const totalIncome6mo = recentTxns.filter((tx) => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0);
+        const totalExpenses6mo = recentTxns.filter((tx) => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0);
 
-        // If no income yet this month, check last month
-        const lastMonthTxns = actual.filter((tx) => {
-            const d = new Date(tx.date);
-            return d >= lastMonth && d < thisMonth;
-        });
-        const lastIncome = lastMonthTxns.filter((tx) => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0);
-        const lastExpenses = lastMonthTxns.filter((tx) => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0);
+        // Count how many months of data we have (at least 1)
+        const monthsOfData = Math.max(1, Math.min(6,
+            new Set(recentTxns.map(tx => tx.date?.substring(0, 7)).filter(Boolean)).size
+        ));
 
-        const effectiveIncome = income > 0 ? income : lastIncome;
-        const effectiveExpenses = expenses > 0 ? expenses : lastExpenses;
+        const effectiveIncome = totalIncome6mo / monthsOfData;
+        const effectiveExpenses = totalExpenses6mo / monthsOfData;
 
-        // --- 1. Savings Rate (0-25) ---
+        // --- 1. Savings Rate / Cash Flow (0-25) ---
         let savingsScore = 0;
         let savingsDetail = "No income data";
         if (effectiveIncome > 0) {
-            const savingsRate = Math.max(0, (effectiveIncome - effectiveExpenses) / effectiveIncome);
-            if (savingsRate >= 0.2) savingsScore = 25;
-            else if (savingsRate >= 0.15) savingsScore = 20;
-            else if (savingsRate >= 0.1) savingsScore = 15;
-            else if (savingsRate >= 0.05) savingsScore = 10;
-            else if (savingsRate > 0) savingsScore = 5;
-            else savingsScore = 0;
-            savingsDetail = `${(savingsRate * 100).toFixed(0)}% savings rate`;
+            const savingsRate = (effectiveIncome - effectiveExpenses) / effectiveIncome;
+            if (savingsRate >= 0.2) { savingsScore = 25; savingsDetail = `${(savingsRate * 100).toFixed(0)}% savings rate — excellent`; }
+            else if (savingsRate >= 0.1) { savingsScore = 20; savingsDetail = `${(savingsRate * 100).toFixed(0)}% savings rate — good`; }
+            else if (savingsRate >= 0) { savingsScore = 15; savingsDetail = "Breaking even — room to save more"; }
+            else if (savingsRate >= -0.2) { savingsScore = 8; savingsDetail = "Spending slightly more than earning"; }
+            else { savingsScore = 3; savingsDetail = "Expenses significantly exceed income"; }
+        } else if (effectiveExpenses > 0) {
+            // Has expenses but no detected income — might be lumpy income
+            // Don't give 0, give a low baseline with helpful message
+            savingsScore = 5;
+            savingsDetail = "Income not detected — may arrive in large deposits";
         }
 
-        // --- 2. Budget Adherence (0-25) ---
+        // --- 2. Budget Adherence / Spending Stability (0-25) ---
+        // If user has set budget limits, score based on adherence.
+        // If not, give a baseline score based on spending consistency
+        // (not 0 — don't punish users for not setting budgets).
         let budgetScore = 0;
-        let budgetDetail = "No budget limits set";
+        let budgetDetail = "";
         const limits = prefs.category_limits;
         if (limits && limits.length > 0) {
                     const catSpending = new Map<string, number>();
+                    const thisMonthTxns = recentTxns.filter(tx => new Date(tx.date) >= thisMonth);
                     for (const tx of thisMonthTxns) {
                         if (tx.amount <= 0) continue;
                         const cat = inferCategory(tx);
@@ -114,6 +121,17 @@ export function FinancialHealthScore() {
                         budgetScore = Math.round(adherenceRate * 25);
                         budgetDetail = `${underBudget}/${total} categories under budget`;
                     }
+        } else {
+            // No budgets set — give a baseline score based on spending stability.
+            // Not having budgets isn't a failure, but setting them shows planning.
+            if (effectiveExpenses > 0 && effectiveIncome > 0) {
+                // Give 12/25 as a baseline — "you're doing fine, but budgets would help"
+                budgetScore = 12;
+                budgetDetail = "Set category budgets to improve this score";
+            } else {
+                budgetScore = 10;
+                budgetDetail = "Set budgets to track your spending";
+            }
         }
 
         // --- 3. Debt-to-Income Ratio (0-25) ---
