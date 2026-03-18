@@ -1936,11 +1936,18 @@ export function generateDeterministicForecast(
         const calMonth = forecastMonth.getMonth() + 1;
         let target = baseMonthlyExpenseTarget;
 
-        // Tuition months: students pay tuition in Jan and Aug
-        // Adds ~$1000 for typical university charges
+        // Tuition months: students pay tuition in Jan and Aug.
+        // Auto-detect tuition amount from transaction history, or use $1200 default.
         if (insightProfile?.life_situation === "student_aid" || insightProfile?.annual_events === "tuition") {
             if (calMonth === 1 || calMonth === 8) {
-                target += 1000;
+                const tuitionCharges = cleaned.filter(tx =>
+                    /tuition|university.*fee|college.*fee/i.test(tx.merchant) &&
+                    Math.abs(tx.amount) > 100
+                );
+                const tuitionAmount = tuitionCharges.length > 0
+                    ? Math.abs(tuitionCharges[tuitionCharges.length - 1].amount)
+                    : 1200; // Default if no tuition charge detected
+                target += tuitionAmount;
             }
         }
 
@@ -1966,12 +1973,17 @@ export function generateDeterministicForecast(
         targetTotalExpenses += insightProfile.upcoming_large_expense;
     }
 
-    // TOP-DOWN calibration: PER-MONTH scaling.
-    // Instead of one global multiplier (which over-corrects some months and
-    // under-corrects others), scale each month independently to hit its target.
-    // This is critical when calendar-specific adjustments (tuition, holidays)
-    // create different targets per month.
-    {
+    // TOP-DOWN calibration.
+    // Use PER-MONTH scaling when we have calendar-specific adjustments (tuition,
+    // holidays, etc.) — these create legitimately different targets per month.
+    // Otherwise, use a single global scale factor (better when targets are flat
+    // because it distributes error more evenly across months).
+    const hasCalendarAdjustments = perMonthTargets.some((t, i) => 
+        i > 0 && Math.abs(t - perMonthTargets[0]) > 100
+    );
+
+    if (hasCalendarAdjustments) {
+        // Per-month scaling for calendar-aware forecasts
         const allExpenseTxs = [...recurringTxs, ...discretionaryTxs].filter(tx => tx.amount < 0);
         const expByMonth = new Map<number, typeof allExpenseTxs>();
         for (const tx of allExpenseTxs) {
@@ -1987,11 +1999,25 @@ export function generateDeterministicForecast(
             const monthPredicted = monthTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0);
             const monthTarget = perMonthTargets[i] || baseMonthlyExpenseTarget;
             if (monthPredicted > 0 && monthTarget > 0) {
-                const scale = clamp(monthTarget / monthPredicted, 0.4, 3.5);
+                const maxScale = insightProfile?.expected_monthly_expenses ? 5.0 : 3.5;
+                const scale = clamp(monthTarget / monthPredicted, 0.4, maxScale);
                 if (Math.abs(scale - 1) > 0.03) {
                     for (const tx of monthTxs) {
                         tx.amount = roundTo(tx.amount * scale, 2);
                     }
+                }
+            }
+        }
+    } else {
+        // Global scaling for flat targets (all months same)
+        if (targetTotalExpenses > 0 && totalPredictedExpenses > 0) {
+            const expenseScale = clamp(targetTotalExpenses / totalPredictedExpenses, 0.4, 3.5);
+            if (Math.abs(expenseScale - 1) > 0.03) {
+                for (const tx of recurringTxs) {
+                    if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
+                }
+                for (const tx of discretionaryTxs) {
+                    if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
                 }
             }
         }
