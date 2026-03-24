@@ -150,8 +150,21 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank, required = f
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -12, scale: 0.97 }}
                         transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-                        className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
+                        className="relative max-w-md w-full"
                     >
+                        {required && (
+                            <div className="pointer-events-none absolute right-full top-1/2 mr-6 hidden w-72 -translate-y-1/2 lg:block">
+                                <div className="relative rounded-xl bg-blue-600 p-4 shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-in fade-in slide-in-from-right-4 duration-700">
+                                    <div className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rotate-45 bg-blue-600" />
+                                    <h3 className="mb-1 font-bold text-white">Step 1: Answer Questions</h3>
+                                    <p className="text-sm text-blue-50">
+                                        Complete these questions first to unlock bank connection.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 pt-5 pb-3">
                             <div className="flex items-center gap-2.5">
@@ -236,6 +249,7 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank, required = f
                                     ? "Complete all questions to unlock bank connection"
                                     : "A few quick questions • dramatically improves accuracy"}
                             </p>
+                        </div>
                         </div>
                     </motion.div>
                 )}

@@ -85,7 +85,7 @@ export default function Home() {
                             transition={{ delay: 1 }}
                             className="mt-8"
                         >
-                            <Link href="/login" className="group relative px-8 py-4 bg-slate-900 text-white font-mono text-xs font-bold uppercase tracking-widest overflow-hidden hover:scale-105 transition-transform shadow-lg inline-block">
+                            <Link href="/forecast" className="group relative px-8 py-4 bg-slate-900 text-white font-mono text-xs font-bold uppercase tracking-widest overflow-hidden hover:scale-105 transition-transform shadow-lg inline-block">
                                 <span className="relative z-10 flex items-center gap-2">
                                     Get Your Budget <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </span>
@@ -353,15 +353,15 @@ export default function Home() {
                     </div>
 
                     <div className="bg-white border border-slate-100 p-8 rounded-2xl shadow-xl shadow-slate-200/50 relative overflow-hidden space-y-5">
-                        <h3 className="text-2xl font-bold text-slate-900">Sign In to Access Arc</h3>
+                        <h3 className="text-2xl font-bold text-slate-900">Open Your Forecast</h3>
                         <p className="text-slate-500 leading-relaxed">
-                            Your forecast workspace is behind secure authentication. Continue to sign in and open your prediction dashboard.
+                            Continue to your forecast workspace. If you are not signed in yet, you will be prompted first.
                         </p>
                         <Link
-                            href="/login"
+                            href="/forecast"
                             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 py-4 text-center font-bold text-white transition-all hover:bg-blue-600"
                         >
-                            Continue to Sign In
+                            Go to Forecast Hub
                             <ArrowRight className="h-4 w-4" />
                         </Link>
                     </div>
@@ -376,7 +376,7 @@ export default function Home() {
                  <p className="max-w-xl mx-auto text-slate-500 mb-12 font-mono text-sm leading-relaxed">
                     You didn't sign up for a part-time job managing spreadsheets. Get a budget that does the work for you.
                  </p>
-                 <Link href="/login" className="inline-block group">
+                 <Link href="/forecast" className="inline-block group">
                     <h2 className="text-[8vw] leading-none font-black tracking-tighter group-hover:text-blue-600 transition-colors duration-300">
                         GET YOUR BUDGET
                     </h2>
@@ -391,7 +391,7 @@ export default function Home() {
                 SAN FRANCISCO / TOKYO / NEW YORK
             </div>
             <div className="w-full text-center mt-4 pt-4 border-t border-slate-200">
-                <Link href="/login" className="text-blue-600 hover:underline">Sign In to Start Forecasting</Link>
+                <Link href="/forecast" className="text-blue-600 hover:underline">Go to Forecast Hub</Link>
             </div>
         </footer>
     </main>

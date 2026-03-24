@@ -247,19 +247,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 <PlaidLink blocked={mustAnswerInsightsFirst} />
 
                 {/* Onboarding Tooltip */}
-                {isOnboarding && (
+                {isOnboarding && !mustAnswerInsightsFirst && (
                   <div className="absolute left-full top-1/2 ml-6 w-64 -translate-y-1/2 transform">
                     <div className="relative rounded-xl bg-blue-600 p-4 shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-in fade-in slide-in-from-left-4 duration-700">
                       {/* Arrow */}
                       <div className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rotate-45 bg-blue-600"></div>
-                      <h3 className="mb-1 font-bold text-white">
-                        {mustAnswerInsightsFirst ? "Step 1: Answer Questions" : "Step 2: Connect Your Bank"}
-                      </h3>
-                      <p className="text-sm text-blue-50">
-                        {mustAnswerInsightsFirst
-                          ? "Complete the insight questions first to unlock bank connection."
-                          : "Securely link your accounts to activate AI-powered forecasting."}
-                      </p>
+                      <h3 className="mb-1 font-bold text-white">Step 2: Connect Your Bank</h3>
+                      <p className="text-sm text-blue-50">Securely link your accounts to activate AI-powered forecasting.</p>
                     </div>
                   </div>
                 )}

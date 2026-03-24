@@ -33,7 +33,7 @@ export default function Navbar() {
             </Link>
           ))}
           
-          <Link href="/login" className="mt-4 border border-white px-4 py-2 font-mono text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-colors text-center">
+          <Link href="/forecast" className="mt-4 border border-white px-4 py-2 font-mono text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-colors text-center">
             GET YOUR BUDGET
           </Link>
       </div>
