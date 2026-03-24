@@ -8,9 +8,10 @@ import type { InsightQuestion, InsightAnswer } from "@/lib/insight-questions";
 interface Props {
     onComplete?: () => void; // Called after all questions answered — trigger re-forecast
     showBeforeBank?: boolean; // Show onboarding questions before bank connection
+    required?: boolean; // If true, user must complete questions (no dismiss/skip)
 }
 
-export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
+export function InsightQuestionsModal({ onComplete, showBeforeBank, required = false }: Props) {
     const [questions, setQuestions] = useState<InsightQuestion[]>([]);
     const [step, setStep] = useState(0);
     const [answers, setAnswers] = useState<InsightAnswer[]>([]);
@@ -26,7 +27,7 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
             try {
                 // Check if user has already completed onboarding questions
                 const completedKey = "arc-insight-onboarding-done";
-                if (!showBeforeBank) {
+                if (!showBeforeBank || required) {
                     const done = localStorage.getItem(completedKey);
                     if (done) { if (!cancelled) setLoaded(true); return; }
                 }
@@ -60,7 +61,10 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
         setSubmitting(false);
         setDone(true);
         // Mark onboarding as complete so we don't show again until bank is connected
-        try { localStorage.setItem("arc-insight-onboarding-done", "1"); } catch {}
+        try {
+            localStorage.setItem("arc-insight-onboarding-done", "1");
+            window.dispatchEvent(new Event("arc-insight-onboarding-updated"));
+        } catch {}
         // Give user a moment to see the success state, then close and trigger re-forecast
         setTimeout(() => {
             setQuestions([]);
@@ -99,6 +103,7 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
     };
 
     const handleSkip = () => {
+        if (required) return;
         if (step < total - 1) {
             setStep(s => s + 1);
         } else {
@@ -107,6 +112,7 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
     };
 
     const handleDismiss = () => {
+        if (required) return;
         // Save whatever answers we have so far
         if (answers.length > 0) {
             fetch("/api/insights/answers", {
@@ -161,7 +167,10 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
                             </div>
                             <button
                                 onClick={handleDismiss}
+                                disabled={required}
                                 className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded-lg hover:bg-zinc-800"
+                                aria-label={required ? "Questions are required" : "Close questions modal"}
+                                title={required ? "Questions are required" : "Close"}
                             >
                                 <X className="h-4 w-4" />
                             </button>
@@ -217,12 +226,15 @@ export function InsightQuestionsModal({ onComplete, showBeforeBank }: Props) {
                         <div className="flex items-center justify-between px-5 py-4 mt-2">
                             <button
                                 onClick={handleSkip}
+                                disabled={required}
                                 className="text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
                             >
-                                Skip
+                                {required ? "Required" : "Skip"}
                             </button>
                             <p className="text-xs text-zinc-600">
-                                A few quick questions • dramatically improves accuracy
+                                {required
+                                    ? "Complete all questions to unlock bank connection"
+                                    : "A few quick questions • dramatically improves accuracy"}
                             </p>
                         </div>
                     </motion.div>

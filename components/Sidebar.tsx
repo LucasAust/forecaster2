@@ -25,6 +25,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { triggerUpdate, isSyncing, syncProgress, balance, accounts, error, loadingStage, transactions, lastUpdated, hasLinkedBank } = useSync();
   const [collapsed, setCollapsed] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
+  const [insightOnboardingDone, setInsightOnboardingDone] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -41,6 +42,35 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       const saved = localStorage.getItem("arc-sidebar-collapsed");
       if (saved === "true") setCollapsed(true);
     } catch { /* restricted storage context */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      setInsightOnboardingDone(localStorage.getItem("arc-insight-onboarding-done") === "1");
+    } catch {
+      setInsightOnboardingDone(false);
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "arc-insight-onboarding-done") {
+        setInsightOnboardingDone(event.newValue === "1");
+      }
+    };
+
+    const onInsightUpdated = () => {
+      try {
+        setInsightOnboardingDone(localStorage.getItem("arc-insight-onboarding-done") === "1");
+      } catch {
+        setInsightOnboardingDone(false);
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("arc-insight-onboarding-updated", onInsightUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("arc-insight-onboarding-updated", onInsightUpdated);
+    };
   }, []);
 
   const toggleCollapsed = () => {
@@ -83,6 +113,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     (!transactions || transactions.length === 0) &&
     accounts.length === 0 &&
     !hasLinkedBank;
+
+  const mustAnswerInsightsFirst = isOnboarding && !insightOnboardingDone;
 
   return (
     // Removed "transition-transform" to ensure fixed overlay works correctly relative to viewport
@@ -178,7 +210,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               <button
                 type="button"
                 onClick={() => setShowAccounts(!showAccounts)}
-                aria-expanded={showAccounts}
                 aria-label="Toggle account details"
                 className="w-full text-left"
               >
@@ -213,7 +244,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             {/* Spotlight Container for Connect Button */}
             {!collapsed && (
               <div className={clsx("flex justify-center transition-all duration-500", isOnboarding ? "relative z-[60] scale-110" : "")}>
-                <PlaidLink />
+                <PlaidLink blocked={mustAnswerInsightsFirst} />
 
                 {/* Onboarding Tooltip */}
                 {isOnboarding && (
@@ -221,8 +252,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     <div className="relative rounded-xl bg-blue-600 p-4 shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-in fade-in slide-in-from-left-4 duration-700">
                       {/* Arrow */}
                       <div className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rotate-45 bg-blue-600"></div>
-                      <h3 className="mb-1 font-bold text-white">Step 2: Connect Your Bank</h3>
-                      <p className="text-sm text-blue-50">Securely link your accounts to activate AI-powered forecasting.</p>
+                      <h3 className="mb-1 font-bold text-white">
+                        {mustAnswerInsightsFirst ? "Step 1: Answer Questions" : "Step 2: Connect Your Bank"}
+                      </h3>
+                      <p className="text-sm text-blue-50">
+                        {mustAnswerInsightsFirst
+                          ? "Complete the insight questions first to unlock bank connection."
+                          : "Securely link your accounts to activate AI-powered forecasting."}
+                      </p>
                     </div>
                   </div>
                 )}

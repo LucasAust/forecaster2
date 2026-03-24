@@ -5,9 +5,13 @@ import { usePlaidLink, PlaidLinkOnSuccess, PlaidLinkOptions } from 'react-plaid-
 import { useSync } from "@/contexts/SyncContext";
 import { authFetch } from "@/lib/api";
 
-import { Loader2, Plus, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, CheckCircle2, Lock } from 'lucide-react';
 
-export function PlaidLink() {
+interface PlaidLinkProps {
+    blocked?: boolean;
+}
+
+export function PlaidLink({ blocked = false }: PlaidLinkProps) {
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSyncingAfterConnect, setIsSyncingAfterConnect] = useState(false);
@@ -70,6 +74,7 @@ export function PlaidLink() {
     };
 
     const { open, ready } = usePlaidLink(config);
+    const isButtonDisabled = !ready || isSyncingAfterConnect || blocked;
 
     if (loading) {
         return (
@@ -97,12 +102,22 @@ export function PlaidLink() {
             <button
                 type="button"
                 onClick={() => open()}
-                disabled={!ready || isSyncingAfterConnect}
-                className="group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
+                disabled={isButtonDisabled}
+                className={
+                    blocked
+                        ? "group flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all disabled:cursor-not-allowed"
+                        : "group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                }
+                title={blocked ? "Complete the onboarding questions first" : undefined}
             >
-                <Plus className="h-4 w-4" />
-                {isConnected ? "Add Another Bank" : "Connect Bank"}
+                {blocked ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {blocked ? "Connect Bank (Locked)" : (isConnected ? "Add Another Bank" : "Connect Bank")}
             </button>
+            {blocked && (
+                <p className="max-w-[220px] text-center text-[11px] text-zinc-500">
+                    Complete the required insight questions to unlock bank connection.
+                </p>
+            )}
         </div>
     );
 }
