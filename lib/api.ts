@@ -22,6 +22,8 @@ interface TransactionsResponse {
     accounts: PlaidAccount[];
     /** True when the user has at least one Plaid item linked, even with no transactions yet */
     hasLinkedBank?: boolean;
+    /** Item IDs that need re-authentication via Plaid Link update mode */
+    requiresReauth?: string[];
 }
 
 export async function fetchTransactions(force = false): Promise<TransactionsResponse> {
@@ -68,14 +70,22 @@ export function processForecastData(forecast: Forecast, currentBalance: number):
         dailyData[date].transactions.push(tx);
     }
 
-    // 2. Generate a continuous 90-day timeline starting from tomorrow
+    // 2. Generate a continuous 90-day timeline starting from tomorrow.
+    // Use noon-anchored local dates (matching the engine's parseDate convention)
+    // to avoid UTC-vs-local drift that can shift dates by 1 day after ~5pm
+    // in US timezones.
     const today = new Date();
+    today.setHours(12, 0, 0, 0); // Anchor to noon, same as engine's parseDate
     const timeline: ForecastTimelinePoint[] = [];
 
     for (let i = 1; i <= 90; i++) {
         const dateObj = new Date(today);
         dateObj.setDate(today.getDate() + i);
-        const dateStr = dateObj.toISOString().split('T')[0];
+        // Format as YYYY-MM-DD using local date components, not toISOString() (which is UTC)
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
 
         const dayData = dailyData[dateStr] || { income: 0, expenses: 0, transactions: [] };
 

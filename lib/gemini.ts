@@ -188,13 +188,39 @@ If there are no genuinely ambiguous transactions, return: { "questions": [] }
             const profile = buildFinancialProfileSummary(history);
             const baseline = summarizeBaselineForecast(baseForecast);
 
-            // Compute the 3 forecast month names for context
+            // Compute the forecast month names. The forecast window starts tomorrow
+            // and covers 90 days. If today is mid-month, the first and last months
+            // are partial. We ask Gemini for FULL month predictions and handle
+            // pro-rating in applyGeminiTargets.
             const refMonth = referenceDate.getMonth();
             const refYear = referenceDate.getFullYear();
-            const forecastMonthNames = [0, 1, 2].map(i => {
-                const d = new Date(refYear, refMonth + 1 + i, 1);
-                return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-            });
+            const forecastStart = new Date(refYear, refMonth, referenceDate.getDate() + 1);
+            const forecastEnd = new Date(forecastStart);
+            forecastEnd.setDate(forecastEnd.getDate() + 89);
+            
+            // Enumerate all calendar months touched by the forecast window
+            const forecastMonthNames: string[] = [];
+            const forecastMonthFractions: { name: string; fraction: number }[] = [];
+            {
+                let cursor = new Date(forecastStart.getFullYear(), forecastStart.getMonth(), 1);
+                while (cursor <= forecastEnd) {
+                    const y = cursor.getFullYear();
+                    const m = cursor.getMonth();
+                    const daysInMonth = new Date(y, m + 1, 0).getDate();
+                    const monthStart = new Date(y, m, 1);
+                    const monthEnd = new Date(y, m, daysInMonth);
+                    const effStart = monthStart < forecastStart ? forecastStart : monthStart;
+                    const effEnd = monthEnd > forecastEnd ? forecastEnd : monthEnd;
+                    const forecastDays = Math.max(0, Math.round((effEnd.getTime() - effStart.getTime()) / 86_400_000) + 1);
+                    const fraction = forecastDays / daysInMonth;
+                    if (fraction > 0) {
+                        const name = new Date(y, m, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+                        forecastMonthNames.push(`${name} (${Math.round(fraction * 100)}% of month)`);
+                        forecastMonthFractions.push({ name, fraction });
+                    }
+                    cursor = new Date(y, m + 1, 1);
+                }
+            }
 
             // Add user insight context if available
             const insightContext = insightProfile ? buildInsightContext(insightProfile) : "";
@@ -209,7 +235,10 @@ HISTORICAL MONTHLY INCOME (oldest to newest):
 
 KNOWN RECURRING EXPENSES: ${profile.recurringExpenseSummary}
 ${insightContext ? `\nUSER-PROVIDED CONTEXT (from onboarding questions — trust these over historical patterns):\n${insightContext}\n` : ""}
-TASK: Predict total expenses and total income for each of the next 3 months: ${forecastMonthNames.join(', ')}.
+TASK: Predict total expenses and total income for FULL calendar months.
+Forecast window: ${forecastMonthNames.join(', ')}.
+Some months are partial (e.g., only 23% of the month is in the forecast window), but you should predict the FULL month's total. The system will pro-rate partial months automatically.
+Predict for exactly 3 full months: the 3 months with the most forecast days.
 
 RULES:
 1. For EXPENSES: Look at the last 3-4 months closely. If spending recently increased or decreased, your prediction should reflect the NEW level, not the historical average. Recent months matter more than old months.
@@ -425,6 +454,11 @@ function summarizeBaselineForecast(forecast: Forecast) {
  * Scales all transactions in each forecast month to match Gemini's predicted totals.
  * This is the core of the hybrid approach: deterministic engine provides STRUCTURE
  * (which categories, which days), Gemini provides MAGNITUDE (how much per month).
+ *
+ * IMPORTANT: Gemini predicts FULL calendar months. When a forecast month is partial
+ * (e.g., only 7 days of March), the target must be pro-rated by the fraction of
+ * the month in the forecast window. Without this, 7 days of March would get
+ * scaled to match a full month's spending — inflating everything ~4x.
  */
 function applyGeminiTargets(
     baseForecast: Forecast,
@@ -432,6 +466,33 @@ function applyGeminiTargets(
     incomeTargets: number[],
     referenceDate: Date
 ): Forecast {
+    // Build forecast window dates
+    const forecastStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() + 1, 12, 0, 0);
+    const forecastEnd = new Date(forecastStart);
+    forecastEnd.setDate(forecastEnd.getDate() + 89);
+
+    // Compute per-month fractions for pro-rating
+    const monthFractions = new Map<string, number>();
+    {
+        let cursor = new Date(forecastStart.getFullYear(), forecastStart.getMonth(), 1);
+        while (cursor <= forecastEnd) {
+            const y = cursor.getFullYear();
+            const m = cursor.getMonth();
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const monthStart = new Date(y, m, 1);
+            const monthEnd = new Date(y, m, daysInMonth);
+            const effStart = monthStart < forecastStart ? forecastStart : monthStart;
+            const effEnd = monthEnd > forecastEnd ? forecastEnd : monthEnd;
+            const forecastDays = Math.max(0, Math.round((effEnd.getTime() - effStart.getTime()) / 86_400_000) + 1);
+            const fraction = forecastDays / daysInMonth;
+            if (fraction > 0) {
+                const key = `${y}-${String(m + 1).padStart(2, '0')}`;
+                monthFractions.set(key, fraction);
+            }
+            cursor = new Date(y, m + 1, 1);
+        }
+    }
+
     // Group transactions by forecast month
     const txsByMonth = new Map<string, typeof baseForecast.predicted_transactions>();
     for (const tx of baseForecast.predicted_transactions) {
@@ -447,9 +508,12 @@ function applyGeminiTargets(
         const month = months[i];
         const monthTxs = txsByMonth.get(month) || [];
         const monthIndex = Math.min(i, 2);
+        const fraction = monthFractions.get(month) ?? 1;
 
-        const targetExpenses = Math.max(100, expenseTargets[monthIndex] || 0);
-        const targetIncome = Math.max(0, incomeTargets[monthIndex] || 0);
+        // Pro-rate Gemini's full-month target by the fraction of the month
+        // that falls within the forecast window.
+        const targetExpenses = Math.max(100, (expenseTargets[monthIndex] || 0)) * fraction;
+        const targetIncome = Math.max(0, (incomeTargets[monthIndex] || 0)) * fraction;
 
         // Current totals from deterministic forecast
         const currentExpenses = monthTxs

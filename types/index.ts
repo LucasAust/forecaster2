@@ -284,6 +284,8 @@ export interface SyncState {
     forecastError: string | null;
     /** True when at least one Plaid item is linked, even if transactions haven't arrived yet */
     hasLinkedBank: boolean;
+    /** Plaid item IDs that need re-authentication (expired bank login) */
+    requiresReauth: boolean;
     /** Questions to ask user after a fresh bank connection (up to 5) */
     pendingClarifications: ClarificationQuestion[];
     /** Submit user's answers, save to DB, re-run forecast */

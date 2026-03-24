@@ -1541,21 +1541,26 @@ function scheduleDiscretionaryItems(
         const amountPerTx = totalPeriodAmount / syntheticTxCount;
         const isExpense = (p.recent_avg_amount || p.avg_amount) < 0;
         
-        // Distribute across time using day-of-week weights and realistic spacing
+        // Distribute across time using day-of-week weights and realistic spacing.
+        // IMPORTANT: Day-of-week weights must map to ACTUAL calendar days, not
+        // arbitrary offsets. We compute the real DOW for each candidate day by
+        // checking addDays(startDate, offset).getDay().
         const chosenDays: number[] = [];
         const minGapDays = Math.max(1, Math.round(totalDays / (syntheticTxCount * 1.5))); // Prevent clustering
+        const startDow = startDate.getDay(); // Actual day-of-week of forecast start (0=Sun..6=Sat)
         
         for (let txNum = 0; txNum < syntheticTxCount; txNum++) {
             let attempts = 0;
             let dayOffset = -1;
             
             while (attempts < 50) {
-                // Pick a day using weekly distribution
+                // Pick a target week within the forecast period
                 const targetWeek = (txNum / syntheticTxCount) * (totalDays / 7);
                 const weekStart = Math.floor(targetWeek * 7);
                 const weekEnd = Math.min(totalDays - 1, weekStart + 6);
                 
-                // Use day-of-week weights within this week
+                // Use day-of-week weights to pick the ACTUAL calendar DOW.
+                // p.day_of_week_weights[0] = Sunday probability, [6] = Saturday.
                 const dow = (() => {
                     const cumWeights = p.day_of_week_weights.reduce((acc, weight, i) => {
                         acc.push((acc[acc.length - 1] || 0) + weight);
@@ -1565,13 +1570,18 @@ function scheduleDiscretionaryItems(
                     return cumWeights.findIndex(cw => r <= cw);
                 })();
                 
-                const targetDow = (weekStart % 7 + dow) % 7;
+                // Find the first day in this week that falls on the chosen DOW.
+                // Map from day-offset to actual calendar DOW: (startDow + offset) % 7
                 let candidateDay = weekStart;
-                while (candidateDay <= weekEnd && candidateDay % 7 !== targetDow) {
-                    candidateDay++;
+                let found = false;
+                for (let d = weekStart; d <= weekEnd && d < totalDays; d++) {
+                    if ((startDow + d) % 7 === dow) {
+                        candidateDay = d;
+                        found = true;
+                        break;
+                    }
                 }
-                
-                if (candidateDay > weekEnd) candidateDay = weekStart + dow; // Fallback
+                if (!found) candidateDay = weekStart; // Fallback to first day of week
                 
                 // Check minimum gap from previous transactions
                 const tooClose = chosenDays.some(prevDay => Math.abs(prevDay - candidateDay) < minGapDays);
@@ -1969,11 +1979,41 @@ export function generateDeterministicForecast(
 
     // PER-MONTH expense targets: scale the base target by the fraction of the
     // month that falls within the forecast window, then adjust for calendar events.
+    //
+    // CRITICAL: For the *current* partial month, recurring bills (rent, utilities,
+    // subscriptions) have likely ALREADY been paid before the forecast window.
+    // The target for that partial month should only reflect discretionary spending
+    // and any recurring items that haven't posted yet — not pro-rata the full
+    // monthly average (which includes recurring items already paid).
+    const recurringMonthlyExpense = recurring
+        .filter(r => r.type === "expense" && (r.cadence === "monthly" || r.cadence === "quarterly"))
+        .reduce((sum, r) => {
+            const perMonth = r.cadence === "quarterly" ? Math.abs(r.recent_amount) / 3 : Math.abs(r.recent_amount);
+            return sum + perMonth;
+        }, 0);
+
     const perMonthTargets: number[] = [];
     for (let i = 0; i < actualForecastMonths; i++) {
         const calMonth = parseInt(perMonthKeys[i].split("-")[1], 10);
         const fraction = perMonthFractions[i];
-        let target = baseMonthlyExpenseTarget * fraction;
+
+        // For partial months (fraction < 0.85), check if recurring expenses have
+        // already been paid this month. If so, only target discretionary spending
+        // for the remaining days, not the full pro-rated amount.
+        let target: number;
+        if (fraction < 0.85 && i === 0) {
+            // First partial month: recurring items likely already paid.
+            // Count how many recurring items actually appear in this month's forecast.
+            const monthKey = perMonthKeys[i];
+            const recurringInThisMonth = recurringTxs
+                .filter(tx => tx.amount < 0 && tx.date.substring(0, 7) === monthKey)
+                .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            // Target = what recurring IS scheduled + discretionary prorated amount
+            const discretionaryMonthly = Math.max(0, baseMonthlyExpenseTarget - recurringMonthlyExpense);
+            target = recurringInThisMonth + discretionaryMonthly * fraction;
+        } else {
+            target = baseMonthlyExpenseTarget * fraction;
+        }
 
         // Tuition months: students pay tuition in Jan and Aug.
         if (insightProfile?.life_situation === "student_aid" || insightProfile?.annual_events === "tuition") {
@@ -2011,17 +2051,12 @@ export function generateDeterministicForecast(
         targetTotalExpenses += insightProfile.upcoming_large_expense;
     }
 
-    // TOP-DOWN calibration.
-    // Use PER-MONTH scaling when we have calendar-specific adjustments (tuition,
-    // holidays, etc.) — these create legitimately different targets per month.
-    // Otherwise, use a single global scale factor (better when targets are flat
-    // because it distributes error more evenly across months).
-    const hasCalendarAdjustments = perMonthTargets.some((t, i) => 
-        i > 0 && Math.abs(t - perMonthTargets[0]) > 100
-    );
-
-    if (hasCalendarAdjustments) {
-        // Per-month scaling for calendar-aware forecasts — bucket by YYYY-MM key
+    // TOP-DOWN calibration: ALWAYS use per-month scaling.
+    // Global scaling distributes corrections uniformly across months, which
+    // over-inflates partial months (e.g., 7 days of March getting the same
+    // proportional boost as 30 days of April). Per-month scaling ensures
+    // each month independently hits its target.
+    {
         const allExpenseTxs = [...recurringTxs, ...discretionaryTxs].filter(tx => tx.amount < 0);
         const expByMonthKey = new Map<string, typeof allExpenseTxs>();
         for (const tx of allExpenseTxs) {
@@ -2037,24 +2072,16 @@ export function generateDeterministicForecast(
             const monthTarget = perMonthTargets[i] || baseMonthlyExpenseTarget * perMonthFractions[i];
             if (monthPredicted > 0 && monthTarget > 0) {
                 const maxScale = insightProfile?.expected_monthly_expenses ? 5.0 : 3.5;
-                const scale = clamp(monthTarget / monthPredicted, 0.4, maxScale);
+                // For the first partial month, use tighter bounds to prevent
+                // cramming — don't scale discretionary spending more than 2x.
+                const effectiveMaxScale = (i === 0 && perMonthFractions[i] < 0.85)
+                    ? Math.min(maxScale, 2.0)
+                    : maxScale;
+                const scale = clamp(monthTarget / monthPredicted, 0.4, effectiveMaxScale);
                 if (Math.abs(scale - 1) > 0.03) {
                     for (const tx of monthTxs) {
                         tx.amount = roundTo(tx.amount * scale, 2);
                     }
-                }
-            }
-        }
-    } else {
-        // Global scaling for flat targets (all months same)
-        if (targetTotalExpenses > 0 && totalPredictedExpenses > 0) {
-            const expenseScale = clamp(targetTotalExpenses / totalPredictedExpenses, 0.4, 3.5);
-            if (Math.abs(expenseScale - 1) > 0.03) {
-                for (const tx of recurringTxs) {
-                    if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
-                }
-                for (const tx of discretionaryTxs) {
-                    if (tx.amount < 0) tx.amount = roundTo(tx.amount * expenseScale, 2);
                 }
             }
         }
@@ -2064,82 +2091,102 @@ export function generateDeterministicForecast(
     // Use multi-horizon model that blends weekly, monthly, quarterly, and yearly
     // signals for per-month income targets. Falls back to user-stated expectation
     // if provided via insight questions.
+    //
+    // CRITICAL: Income targets must cover ALL calendar months in the forecast
+    // window (including partial first/last months), keyed by YYYY-MM.
+    // The old code built targets for "next 3 months" starting at month+1,
+    // completely missing the current partial month. Variable income placed
+    // in March 25-31 was scaled using April's target — wrong month entirely.
     const { predictMultiHorizonIncome } = require("./multi-horizon-income");
     const multiHorizonResults = predictMultiHorizonIncome(rawTransactions, today, forecastMonths, insightProfile) as Array<{target: number; confidence: string}>;
     const multiHorizonTargets = multiHorizonResults.map(t => t.target);
     const multiHorizonConfidence = multiHorizonResults.map(t => t.confidence);
     
-    let seasonalIncomeTargets = insightProfile?.expected_monthly_income
+    const baseIncomeTargets = insightProfile?.expected_monthly_income
         ? Array(forecastMonths).fill(insightProfile.expected_monthly_income)
         : multiHorizonTargets;
+
+    // Build per-month income targets keyed by YYYY-MM, covering all calendar
+    // months in the forecast window with proper pro-rating for partial months.
+    const perMonthIncomeTargets = new Map<string, number>();
+    const perMonthIncomeConfidence = new Map<string, string>();
+    for (let i = 0; i < actualForecastMonths; i++) {
+        const key = perMonthKeys[i];
+        const fraction = perMonthFractions[i];
+        const calMonth = parseInt(key.split("-")[1], 10);
+        const quarter = Math.ceil(calMonth / 3);
+        
+        // Find the best matching target from the multi-horizon model.
+        // Multi-horizon targets are for forecast months 0, 1, 2 (= month+1, month+2, month+3).
+        // Map this forecast-window month to the closest target index.
+        const forecastMonthDate = new Date(parseInt(key.split("-")[0], 10), calMonth - 1, 1);
+        const monthsFromRef = (forecastMonthDate.getFullYear() - today.getFullYear()) * 12
+            + (forecastMonthDate.getMonth() - today.getMonth()) - 1;
+        const targetIdx = clamp(monthsFromRef, 0, baseIncomeTargets.length - 1);
+        const baseTarget = baseIncomeTargets[targetIdx] || baseIncomeTargets[0] || 0;
+        const confidence = multiHorizonConfidence[targetIdx] || "low";
+        
+        // Pro-rate for partial months
+        perMonthIncomeTargets.set(key, baseTarget * fraction);
+        perMonthIncomeConfidence.set(key, confidence);
+    }
 
     // Upcoming large income: if user confirmed a big payment is coming,
     // add it to the first forecast month's target. This is the single
     // biggest lever for income accuracy on spike months.
     if (insightProfile?.upcoming_large_income && insightProfile.upcoming_large_income > 0) {
-        seasonalIncomeTargets = [...seasonalIncomeTargets];
-        seasonalIncomeTargets[0] = (seasonalIncomeTargets[0] || 0) + insightProfile.upcoming_large_income;
+        const firstKey = perMonthKeys[0];
+        perMonthIncomeTargets.set(firstKey, (perMonthIncomeTargets.get(firstKey) || 0) + insightProfile.upcoming_large_income);
     } else if (insightProfile?.upcoming_large_income_likely) {
-        // User said "maybe" — add a conservative estimate (median of historical spikes)
-        // detected from transaction data. Use 30% of the median spike as a hedge.
         const incomeVals = (rawTransactions as any[])
             .filter((tx: any) => !tx.pending && tx.amount < 0)
             .map((tx: any) => Math.abs(tx.amount));
         const medIncome = incomeVals.length > 0
             ? [...incomeVals].sort((a: number, b: number) => a - b)[Math.floor(incomeVals.length / 2)]
             : 0;
-        // Only add if there are real spikes in the data
         const maxMonthlyIncome = multiHorizonTargets.length > 0 ? Math.max(...multiHorizonTargets) : 0;
         if (maxMonthlyIncome > medIncome * 2) {
-            seasonalIncomeTargets = [...seasonalIncomeTargets];
-            seasonalIncomeTargets[0] = (seasonalIncomeTargets[0] || 0) + maxMonthlyIncome * 0.3;
+            const firstKey = perMonthKeys[0];
+            perMonthIncomeTargets.set(firstKey, (perMonthIncomeTargets.get(firstKey) || 0) + maxMonthlyIncome * 0.3);
         }
     }
 
     // Recurring high-income months: if confirmed, boost targets for
     // months that historically have large deposits
     if (insightProfile?.recurring_high_income_confirmed && insightProfile?.high_income_months) {
-        seasonalIncomeTargets = [...seasonalIncomeTargets];
-        for (let i = 0; i < forecastMonths; i++) {
-            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
-            const calMonth = forecastMonth.getMonth() + 1;
+        for (let i = 0; i < actualForecastMonths; i++) {
+            const key = perMonthKeys[i];
+            const calMonth = parseInt(key.split("-")[1], 10);
             if (insightProfile.high_income_months.includes(calMonth)) {
-                // Boost this month's target with the expected high-income amount
-                const boost = insightProfile.high_income_amount || multiHorizonTargets[i] * 2;
-                seasonalIncomeTargets[i] = Math.max(seasonalIncomeTargets[i], boost);
+                const targetIdx = clamp(i - (perMonthFractions[0] < 0.85 ? 1 : 0), 0, multiHorizonTargets.length - 1);
+                const boost = insightProfile.high_income_amount || multiHorizonTargets[targetIdx] * 2;
+                perMonthIncomeTargets.set(key, Math.max(perMonthIncomeTargets.get(key) || 0, boost * perMonthFractions[i]));
             }
         }
     }
     
     // Birth month: add small income boost (gifts) for the birth month
     if (insightProfile?.birth_month) {
-        seasonalIncomeTargets = [...seasonalIncomeTargets];
-        for (let i = 0; i < forecastMonths; i++) {
-            const forecastMonth = new Date(today.getFullYear(), today.getMonth() + 1 + i, 1);
-            const calMonth = forecastMonth.getMonth() + 1;
+        for (let i = 0; i < actualForecastMonths; i++) {
+            const key = perMonthKeys[i];
+            const calMonth = parseInt(key.split("-")[1], 10);
             if (calMonth === insightProfile.birth_month) {
-                // Birthday gift income — conservative $200-500 boost
-                seasonalIncomeTargets[i] = (seasonalIncomeTargets[i] || 0) + 300;
+                perMonthIncomeTargets.set(key, (perMonthIncomeTargets.get(key) || 0) + 300 * perMonthFractions[i]);
             }
         }
     }
 
     const incomeHaircut = insightProfile?.income_type === "salary" ? 0.95 : 0.9;
-    const targetTotalIncome = seasonalIncomeTargets.reduce((a: number, b: number) => a + b, 0) * incomeHaircut;
 
     const recurringIncomeTotal = recurringTxs
         .filter(tx => tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0);
-    const variableIncomeTarget = Math.max(0, targetTotalIncome - recurringIncomeTotal);
 
     // Combine variable + lumpy income
     let allVariableIncome = [...variableIncomeTxs, ...lumpyIncomeTxs];
-    const totalVariableIncome = allVariableIncome.reduce((s, tx) => s + tx.amount, 0);
 
-    // Per-month income calibration using multi-horizon targets.
-    // Instead of scaling all variable income uniformly, scale each month
-    // independently to hit its specific target. This handles seasonal
-    // variations where Q4 income is naturally lower than Q2.
+    // Per-month income calibration using per-month targets keyed by YYYY-MM.
+    // Each month is scaled independently to hit its specific target.
     {
         const incomeByMonth = new Map<string, PredictedTransaction[]>();
         for (const tx of allVariableIncome) {
@@ -2158,13 +2205,11 @@ export function generateDeterministicForecast(
         const maxUpScale = insightProfile?.income_type === "salary" ? 1.5 : 1.4;
         const scaledVariableIncome: PredictedTransaction[] = [];
 
-        // Get sorted forecast months
+        // Scale each month independently, matched by YYYY-MM key
         const fMonths = [...incomeByMonth.keys()].sort();
-        for (let i = 0; i < fMonths.length; i++) {
-            const month = fMonths[i];
+        for (const month of fMonths) {
             const monthTxs = incomeByMonth.get(month) || [];
-            const monthIdx = Math.min(i, seasonalIncomeTargets.length - 1);
-            const monthTarget = (seasonalIncomeTargets[monthIdx] || 0) * incomeHaircut;
+            const monthTarget = (perMonthIncomeTargets.get(month) || 0) * incomeHaircut;
             const recurringInMonth = recurringIncomeByMonth.get(month) || 0;
             const variableTarget = Math.max(0, monthTarget - recurringInMonth);
             const variableActual = monthTxs.reduce((s, tx) => s + tx.amount, 0);
@@ -2188,6 +2233,9 @@ export function generateDeterministicForecast(
     // The per-month scaling can only do 1.4x. If the scheduler generated very
     // little income (< 80% of target), inject a single "Expected Income" tx
     // to close the gap. This captures lumpy income the scheduler can't model.
+    //
+    // Uses perMonthIncomeTargets (keyed by YYYY-MM) so the fill aligns with
+    // the correct calendar month, including partial months.
     const incomeFillTxs: PredictedTransaction[] = [];
     {
         const incomeByMonth = new Map<string, number>();
@@ -2195,18 +2243,28 @@ export function generateDeterministicForecast(
             const m = tx.date.substring(0, 7);
             incomeByMonth.set(m, (incomeByMonth.get(m) || 0) + tx.amount);
         }
-        for (let i = 0; i < forecastMonths; i++) {
-            const d = new Date(today.getFullYear(), today.getMonth() + 1 + i, 15);
-            const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        for (let i = 0; i < actualForecastMonths; i++) {
+            const monthStr = perMonthKeys[i];
+            const fraction = perMonthFractions[i];
+            // For partial months, place the fill stub at the midpoint of the
+            // forecast days in that month, not always on the 15th.
+            const [yearStr, monStr] = monthStr.split("-");
+            const calMonth = parseInt(monStr, 10);
+            const calYear = parseInt(yearStr, 10);
+            const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+            const effectiveStartDay = (i === 0 && fraction < 1)
+                ? forecastStartDate.getDate()
+                : 1;
+            const effectiveEndDay = (i === actualForecastMonths - 1 && fraction < 1)
+                ? forecastEndDate.getDate()
+                : daysInMonth;
+            const midDay = Math.round((effectiveStartDay + effectiveEndDay) / 2);
+            const fillDate = new Date(calYear, calMonth - 1, midDay, 12, 0, 0);
+            const fillDateStr = formatDate(fillDate);
+
             const predicted = incomeByMonth.get(monthStr) || 0;
-            const target = (seasonalIncomeTargets[i] || 0) * incomeHaircut;
-            // Fill if predicted falls short of target. Fill amount depends on confidence:
-            //   high:   fill 100% of gap (strong seasonal/quarterly signal)
-            //   medium: fill 50% of gap (some signal but uncertain)
-            //   low:    no fill
-            const conf = multiHorizonConfidence[i] || "low";
-            // If scheduler produced $0 income, always fill (something is better than nothing).
-            // If scheduler produced some income, only fill for high-confidence targets.
+            const target = (perMonthIncomeTargets.get(monthStr) || 0) * incomeHaircut;
+            const conf = perMonthIncomeConfidence.get(monthStr) || "low";
             const fillPct = predicted < 1 ? 0.7
                 : conf === "high" ? 0.9
                 : 0;
@@ -2214,8 +2272,8 @@ export function generateDeterministicForecast(
                 const gap = (target - predicted) * fillPct;
                 if (gap > 50) {
                     incomeFillTxs.push({
-                        date: `${monthStr}-15`,
-                        day_of_week: DAY_NAMES[d.getDay()],
+                        date: fillDateStr,
+                        day_of_week: DAY_NAMES[fillDate.getDay()],
                         merchant: "Expected Income",
                         amount: roundTo(gap, 2),
                         category: "Income",
@@ -2241,6 +2299,8 @@ export function generateDeterministicForecast(
     });
 
     // ── Confidence bands: group by month and compute P10/P50/P90 ranges ──
+    // For partial months (first/last in the window), widen the band proportionally
+    // so users understand the uncertainty from having fewer forecast days.
     const bandsByMonth = new Map<string, { income: number; expenses: number }>();
     for (const tx of deduped) {
         const m = tx.date.substring(0, 7);
@@ -2250,17 +2310,28 @@ export function generateDeterministicForecast(
         else bucket.expenses += Math.abs(tx.amount);
     }
 
+    // Build a fraction lookup from perMonthKeys/perMonthFractions
+    const monthFractionLookup = new Map<string, number>();
+    for (let i = 0; i < perMonthKeys.length; i++) {
+        monthFractionLookup.set(perMonthKeys[i], perMonthFractions[i]);
+    }
+
     const isSalary = insightProfile?.income_type === "salary";
     const confidence_bands: ConfidenceBand[] = [...bandsByMonth.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, { income, expenses }]) => {
-            const incomeP10 = roundTo(income * (isSalary ? 0.85 : 0.4), 2);
-            const incomeP50 = roundTo(income, 2);
-            const incomeP90 = roundTo(income * (isSalary ? 1.15 : 2.5), 2);
+            const fraction = monthFractionLookup.get(month) ?? 1;
+            // Partial months have wider uncertainty bands because less data covers them.
+            // Scale the spread inversely with the fraction (e.g., 22.6% of month → ~1.5x wider)
+            const partialSpread = fraction < 0.85 ? Math.min(1.5, 1 / Math.max(0.3, fraction) * 0.5) : 1;
 
-            const expensesP10 = roundTo(expenses * 0.75, 2);
+            const incomeP10 = roundTo(income * (isSalary ? 0.85 : 0.4) / partialSpread, 2);
+            const incomeP50 = roundTo(income, 2);
+            const incomeP90 = roundTo(income * (isSalary ? 1.15 : 2.5) * partialSpread, 2);
+
+            const expensesP10 = roundTo(expenses * 0.75 / partialSpread, 2);
             const expensesP50 = roundTo(expenses, 2);
-            const expensesP90 = roundTo(expenses * 1.35, 2);
+            const expensesP90 = roundTo(expenses * 1.35 * partialSpread, 2);
 
             return {
                 month,

@@ -62,6 +62,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const [error, setError] = useState<string | null>(null);
     const [forecastError, setForecastError] = useState<string | null>(null);
     const [hasLinkedBank, setHasLinkedBank] = useState(false);
+    const [requiresReauth, setRequiresReauth] = useState(false);
     const [pendingClarifications, setPendingClarifications] = useState<ClarificationQuestion[]>([]);
 
     const isSyncingRef = useRef(false);
@@ -128,6 +129,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 setTransactions(data.transactions);
                 if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
                 if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
+                if (data.requiresReauth?.length) setRequiresReauth(true);
                 const fc = await callForecastAPI(data.transactions, true);
                 if (fc) { setForecast(fc); setForecastError(null); setLoadingStage('complete'); setLastUpdated(new Date()); }
                 else setForecastError('Forecast model could not generate predictions. Showing latest data.');
@@ -152,6 +154,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                     setTransactions(data.transactions);
                     if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
                     if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
+                    if (data.requiresReauth?.length) setRequiresReauth(true);
                     const fc = await callForecastAPI(data.transactions, true);
                     if (fc) {
                         setForecast(fc); setForecastError(null); setLoadingStage('complete'); setLastUpdated(new Date());
@@ -186,7 +189,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
         const maxRetries = options?.retryOnEmpty ? 12 : 0;
         let attempt = 0;
-        let data: { transactions: Transaction[]; accounts: PlaidAccount[]; hasLinkedBank?: boolean } = { transactions: [], accounts: [] };
+        let data: { transactions: Transaction[]; accounts: PlaidAccount[]; hasLinkedBank?: boolean; requiresReauth?: string[] } = { transactions: [], accounts: [] };
 
         try {
             while (attempt <= maxRetries) {
@@ -202,6 +205,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             setTransactions(data.transactions || []);
             if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
             if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
+            if (data.requiresReauth?.length) setRequiresReauth(true);
             setSyncProgress(50);
 
             if (data.transactions && data.transactions.length > 0) {
@@ -262,6 +266,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
                 setTransactions(data.transactions || []);
                 if (data.accounts) { setAccounts(data.accounts); setBalance(calculateBalance(data.accounts)); }
                 if (data.hasLinkedBank !== undefined) setHasLinkedBank(data.hasLinkedBank);
+                if (data.requiresReauth?.length) setRequiresReauth(true);
                 if (data.transactions && data.transactions.length > 0) {
                     setLoadingStage('forecast');
                     const fc = await callForecastAPI(data.transactions, false);
@@ -286,7 +291,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     return (
         <SyncContext.Provider value={{
             isSyncing, syncProgress, lastUpdated, triggerUpdate,
-            transactions, forecast, balance, accounts, loadingStage, error, forecastError, hasLinkedBank,
+            transactions, forecast, balance, accounts, loadingStage, error, forecastError, hasLinkedBank, requiresReauth,
             pendingClarifications, submitClarifications, dismissClarifications,
         }}>
             {children}

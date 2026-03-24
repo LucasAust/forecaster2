@@ -38,6 +38,8 @@ export async function GET(request: Request) {
 
         let allTransactions: Record<string, unknown>[] = [];
         let allAccounts: Record<string, unknown>[] = [];
+        const itemsNeedingReauth: string[] = [];
+        let newTransactionsArrived = false;
 
         for (const item of items) {
             try {
@@ -112,6 +114,7 @@ export async function GET(request: Request) {
 
                 // Save to Supabase
                 if (newTransactions.length > 0) {
+                    newTransactionsArrived = true;
                     const transactionsToUpsert = newTransactions.map(t => ({
                         transaction_id: t.transaction_id,
                         user_id: user.id,
@@ -156,16 +159,20 @@ export async function GET(request: Request) {
                 if (plaidErr.response) {
                     console.error('Plaid Sync Error Details:', JSON.stringify(plaidErr.response.data, null, 2));
 
-                    // Auto-cleanup: if Plaid says the item no longer exists, remove it
-                    // so it doesn't keep failing on every future sync.
                     const errorCode = plaidErr.response.data?.error_code;
-                    if (errorCode === 'ITEM_NOT_FOUND' || errorCode === 'ITEM_LOGIN_REQUIRED') {
-                        console.warn(`Removing stale plaid item ${item.item_id} (${errorCode})`);
+                    if (errorCode === 'ITEM_NOT_FOUND') {
+                        // Item genuinely gone from Plaid — safe to remove.
+                        console.warn(`Removing stale plaid item ${item.item_id} (ITEM_NOT_FOUND)`);
                         await supabase
                             .from('plaid_items')
                             .delete()
                             .eq('item_id', item.item_id)
                             .eq('user_id', user.id);
+                    } else if (errorCode === 'ITEM_LOGIN_REQUIRED') {
+                        // User needs to re-authenticate — keep the item so existing
+                        // transactions remain available, but flag it for the frontend.
+                        console.warn(`Plaid item ${item.item_id} requires re-authentication`);
+                        itemsNeedingReauth.push(item.item_id);
                     } else {
                         // Non-fatal error: still try to populate accounts_data so the UI
                         // doesn't wrongly show "connect a bank" when a bank IS connected.
@@ -245,7 +252,21 @@ export async function GET(request: Request) {
         allAccounts = dedupedAccounts;
         allTransactions = dedupedTx;
 
-        return NextResponse.json({ transactions: allTransactions, accounts: allAccounts, hasLinkedBank: items.length > 0 });
+        // If new transactions arrived, invalidate the forecast cache so the
+        // next forecast request regenerates instead of serving stale predictions.
+        if (newTransactionsArrived) {
+            await supabase
+                .from('forecasts')
+                .delete()
+                .eq('user_id', user.id);
+        }
+
+        return NextResponse.json({
+            transactions: allTransactions,
+            accounts: allAccounts,
+            hasLinkedBank: items.length > 0,
+            ...(itemsNeedingReauth.length > 0 && { requiresReauth: itemsNeedingReauth }),
+        });
     } catch (error) {
         console.error('Error fetching transactions:', error);
         return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-    const { loadingStage, transactions, error, isSyncing } = useSync();
+    const { loadingStage, transactions, error, isSyncing, requiresReauth } = useSync();
     // Add a minimum loading time to prevent flashing if cache is super fast
     const [showLoading, setShowLoading] = useState(true);
     const [showTutorial, setShowTutorial] = useState(false);
@@ -91,6 +91,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                             ? 'Generating updated forecast…'
                             : 'Syncing your latest transactions…'}
                     </div>
+                </div>
+            )}
+
+            {/* Bank re-authentication required banner */}
+            {requiresReauth && !isLoading && !error && (
+                <div className="fixed top-0 inset-x-0 z-[85] flex items-center justify-center gap-2 bg-amber-950/90 backdrop-blur-sm px-4 py-2 text-xs text-amber-200 border-b border-amber-800/50">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                    <span>Your bank connection needs to be refreshed. <a href="/settings" className="underline font-medium text-amber-100 hover:text-white">Reconnect in Settings</a></span>
                 </div>
             )}
 

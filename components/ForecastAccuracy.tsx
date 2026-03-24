@@ -38,7 +38,7 @@ export function ForecastAccuracy() {
 
         if (predictions.length === 0) return null;
 
-        // Match predictions to actuals
+        // Match predictions to actuals using date + amount + merchant similarity
         let matched = 0;
         let totalError = 0;
         const usedActuals = new Set<number>();
@@ -55,12 +55,33 @@ export function ForecastAccuracy() {
                 const dateDiff = Math.abs(new Date(pred.date).getTime() - new Date(actual.date).getTime());
                 if (dateDiff > 2 * 24 * 60 * 60 * 1000) continue;
 
-                // Amount similarity (within 30%)
+                // Amount similarity — scale tolerance by size:
+                // Small amounts ($0-50): 40% tolerance
+                // Medium amounts ($50-500): 30% tolerance
+                // Large amounts ($500+): 20% tolerance
                 const amountDiff = Math.abs(pred.amount - actual.amount);
-                const amountPct = pred.amount !== 0 ? amountDiff / Math.abs(pred.amount) : amountDiff;
-                if (amountPct > 0.5) continue;
+                const absAmount = Math.max(Math.abs(pred.amount), 1);
+                const tolerance = absAmount < 50 ? 0.4 : absAmount < 500 ? 0.3 : 0.2;
+                const amountPct = amountDiff / absAmount;
+                if (amountPct > tolerance) continue;
 
-                const score = amountPct + (dateDiff / (2 * 24 * 60 * 60 * 1000));
+                // Merchant name similarity bonus — matching merchants get lower score
+                const merchantSimilarity = (() => {
+                    if (!pred.name || !actual.name) return 0.5; // Neutral
+                    // Check for substring match (handles "Netflix" matching "NETFLIX.COM")
+                    if (pred.name.includes(actual.name) || actual.name.includes(pred.name)) return 0;
+                    // Check for shared word tokens (handles "Whole Foods" vs "WHOLE FOODS MARKET")
+                    const predWords = new Set(pred.name.split(/[\s\-_.,]+/).filter(w => w.length > 2));
+                    const actualWords = new Set(actual.name.split(/[\s\-_.,]+/).filter(w => w.length > 2));
+                    const overlap = [...predWords].filter(w => actualWords.has(w)).length;
+                    const totalWords = Math.max(predWords.size, actualWords.size, 1);
+                    return 1 - (overlap / totalWords);
+                })();
+
+                // Combined score: 40% amount, 30% date, 30% merchant
+                const score = amountPct * 0.4
+                    + (dateDiff / (2 * 24 * 60 * 60 * 1000)) * 0.3
+                    + merchantSimilarity * 0.3;
                 if (score < bestScore) {
                     bestScore = score;
                     bestMatch = i;

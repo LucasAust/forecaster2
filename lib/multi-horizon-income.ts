@@ -609,9 +609,17 @@ function predictDisbursementIncome(
 /**
  * Generate multi-horizon income targets for each forecast month.
  * 
+ * IMPORTANT: Generates targets starting from the CURRENT month (not month+1).
+ * The forecast window typically starts mid-month (e.g., March 24 → June 22),
+ * so the current partial month needs its own income target. The caller
+ * pro-rates the target by the fraction of the month in the forecast window.
+ * 
+ * Generates months+1 targets to cover both the partial start month and
+ * the partial end month of the 90-day window.
+ * 
  * @param transactions Full transaction history (Plaid convention)
  * @param referenceDate Forecast reference date
- * @param months Number of months to forecast (default 3)
+ * @param months Number of full months to forecast (default 3)
  */
 export function predictMultiHorizonIncome(
     transactions: Transaction[],
@@ -623,8 +631,9 @@ export function predictMultiHorizonIncome(
 
     if (realIncome.length < 5) {
         // Not enough income data — return zero targets
-        return Array.from({ length: months }, (_, i) => {
-            const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1 + i, 1);
+        // Generate months+1 targets to cover partial start/end months
+        return Array.from({ length: months + 1 }, (_, i) => {
+            const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + i, 1);
             return {
                 month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
                 target: 0,
@@ -636,8 +645,11 @@ export function predictMultiHorizonIncome(
 
     const results: MultiHorizonIncomeTarget[] = [];
 
-    for (let i = 0; i < months; i++) {
-        const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1 + i, 1);
+    // Generate targets starting from the CURRENT month (not month+1).
+    // This covers the partial start month. Generate months+1 total to
+    // also cover the partial end month of the 90-day window.
+    for (let i = 0; i <= months; i++) {
+        const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + i, 1);
         const calMonth = d.getMonth() + 1;
         const quarter = Math.ceil(calMonth / 3);
         const monthStr = `${d.getFullYear()}-${String(calMonth).padStart(2, "0")}`;
