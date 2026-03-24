@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { authFetch } from "@/lib/api";
 import { ChevronRight, ChevronLeft, X, Target, BarChart3, TrendingUp, MessageSquare, Sparkles, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
 
 interface OnboardingStep {
     title: string;
     description: string;
-    icon: React.ElementType;
+    icon: LucideIcon;
     color: string;
     bg: string;
     selector?: string; // CSS selector to highlight

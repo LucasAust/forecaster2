@@ -19,7 +19,7 @@ export default async function EnrollPage() {
     )
 
     if (hasVerifiedFactor) {
-        redirect('/')
+        redirect('/forecast')
     }
 
     // Check if already enrolled (email MFA)
@@ -35,7 +35,7 @@ export default async function EnrollPage() {
         // or has gone stale — clear it and allow re-enrollment.
         const verified = await isEmailMfaVerified(user.id)
         if (verified) {
-            redirect('/')
+            redirect('/forecast')
         }
         // Stale/incomplete enrollment — clear it so the user can start fresh
         await supabase

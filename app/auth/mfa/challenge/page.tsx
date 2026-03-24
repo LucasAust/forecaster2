@@ -27,7 +27,7 @@ export default async function ChallengePage() {
         const totpFactor = factors?.all?.find(f => f.factor_type === 'totp' && f.status === 'verified')
 
         if (!totpFactor) {
-            redirect('/')
+            redirect('/forecast')
         }
 
         return (

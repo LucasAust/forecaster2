@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, TrendingDown, DollarSign } from "lucide-react";
+import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, TrendingDown } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useNotifications, Notification } from "@/contexts/NotificationsContext";
 import { clsx } from "clsx";
 import Link from "next/link";
 
-const TYPE_ICONS: Record<Notification["type"], React.ElementType> = {
+const TYPE_ICONS: Record<Notification["type"], LucideIcon> = {
     warning: AlertTriangle,
     info: Info,
     success: Check,

@@ -122,3 +122,23 @@ body {
   50%  { transform: translateX(120%); }
   100% { transform: translateX(120%); }
 }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 60s linear infinite;
+}
+
+.text-fluid-h2 {
+  font-size: clamp(2rem, 5vw, 5rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.grid-pattern-bg {
+  background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px);
+  background-size: 20px 20px;
+}

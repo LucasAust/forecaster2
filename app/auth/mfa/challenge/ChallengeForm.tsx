@@ -18,7 +18,7 @@ export function ChallengeForm({ factorId }: { factorId: string }) {
 
         try {
             await verifyTOTPChallenge(factorId, code)
-            router.push('/')
+            router.push('/forecast')
             router.refresh()
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Verification failed')

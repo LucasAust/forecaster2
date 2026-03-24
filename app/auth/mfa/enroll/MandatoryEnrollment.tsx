@@ -59,7 +59,7 @@ export function MandatoryEnrollment() {
             } else if (method === 'email') {
                 await verifyEmailMFACode(verificationCode)
             }
-            router.push('/')
+            router.push('/forecast')
             router.refresh()
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Verification failed')
